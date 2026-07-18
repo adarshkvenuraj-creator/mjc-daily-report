@@ -231,6 +231,7 @@
       <div class="actions">
         <button class="primary" id="saveBtn">💾 Save Report</button>
         <button class="secondary" id="pdfBtn">📄 Export as PDF</button>
+        <button class="secondary" id="whatsappBtn" style="border-color:#25D366;color:#128C4A;">🟢 Export to WhatsApp</button>
         <button class="secondary" id="loadBtn">🔄 Load Existing Date</button>
       </div>
     </div>
@@ -546,6 +547,79 @@ document.getElementById('pdfBtn').addEventListener('click', ()=>{
   ]);
 
   doc.save('MJC_Daily_Report_' + date + '.pdf');
+});
+
+// WHATSAPP EXPORT
+document.getElementById('whatsappBtn').addEventListener('click', ()=>{
+  const date = document.getElementById('report_date').value;
+  const dateObj = date ? new Date(date + 'T00:00:00') : new Date();
+  const dd = String(dateObj.getDate()).padStart(2,'0');
+  const mm = String(dateObj.getMonth()+1).padStart(2,'0');
+  const yyyy = dateObj.getFullYear();
+  const formattedDate = `${dd}.${mm}.${yyyy}`;
+
+  const optColl = num('opt_dr_consultation_amount') + num('opt_order_advance') + num('opt_sale') + num('opt_pharmacy');
+  const cutColl = num('cut_cash') + num('cut_card') + num('cut_gpay');
+  const cutTotalColl = cutColl + num('cut_pharmacy_collection_amount');
+  const totalCollection = num('diag_collection') + optColl + cutTotalColl;
+  const totalBusiness = num('diag_collection') + num('opt_dr_consultation_amount') + num('opt_order_value') + num('opt_sale') + num('opt_pharmacy') + cutTotalColl;
+
+  const lines = [];
+  lines.push(`*${formattedDate}*`);
+  lines.push(`*Diagnostics*`);
+  lines.push(`Total Patient : ${num('diag_total_patients')}`);
+  lines.push(`Lab - ${num('diag_lab')}`);
+  lines.push(`Ecg - ${num('diag_ecg')}`);
+  lines.push(`X-Ray - ${num('diag_xray')}`);
+  lines.push(`Cbct - ${num('diag_cbct')}`);
+  lines.push(`Opg- ${num('diag_opg')}`);
+  lines.push(`Usg- ${num('diag_usg')}`);
+  lines.push(`FNAC- ${num('diag_fnac')}`);
+  lines.push(`Biothesiometry- ${num('diag_biothesiometry')}`);
+  lines.push(`Collection = ${money(num('diag_collection'))}`);
+  lines.push(`Today pending= ${money(num('diag_today_pending'))}`);
+  lines.push(`Previous pending Collected - ${money(num('diag_previous_pending_collected'))}`);
+  lines.push(`Mercy Hospital Total - ${num('diag_mercy_hospital_total')}`);
+  lines.push(`Govt. Taluk hospital -${num('diag_govt_taluk_hospital')}`);
+  lines.push(`Google Review - ${num('diag_google_review')}`);
+  lines.push(`Home collection - ${num('diag_home_collection')}`);
+  lines.push(`Tomorrow Home Collection Booked -${num('diag_tomorrow_home_collection_booked')}`);
+  lines.push(``);
+  lines.push(`*Opticals / Eye Care*`);
+  lines.push(`Dr consultation :  ${num('opt_dr_consultation_count')}(${money(num('opt_dr_consultation_amount'))})`);
+  lines.push(`Refraction/Out  : ${num('opt_refraction_out')}`);
+  lines.push(`Camp.               : ${num('opt_camp')}`);
+  lines.push(`No. Of Cust        : ${num('opt_no_of_customers')}`);
+  lines.push(`Order Value        : ${money(num('opt_order_value'))}`);
+  lines.push(`Order adv           : ${money(num('opt_order_advance'))}`);
+  lines.push(`Sale                     : ${money(num('opt_sale'))}`);
+  lines.push(`Pharmacy.          : ${money(num('opt_pharmacy'))}`);
+  lines.push(`Collection           : ${money(optColl)}`);
+  lines.push(`Google review.   :  ${num('opt_google_review')}`);
+  lines.push(`Cutique service   : ${num('opt_cutique_service')}`);
+  lines.push(`Sale from Cutique : ${money(num('opt_sale_from_cutique'))}`);
+  lines.push(`Walkins                : ${num('opt_walkins')}`);
+  lines.push(``);
+  lines.push(`*Cutique*`);
+  lines.push(`No of patients = ${num('cut_no_of_patients')}`);
+  lines.push(`No of procedures = ${num('cut_no_of_procedures')}`);
+  lines.push(`Ai face = ${num('cut_ai_face')}`);
+  lines.push(`google review= ${num('cut_google_review')}`);
+  lines.push(`Cash = ${money(num('cut_cash'))}`);
+  lines.push(`Card = ${money(num('cut_card'))}`);
+  lines.push(`Gpay = ${money(num('cut_gpay'))}`);
+  lines.push(`Collection = ${money(cutColl)}`);
+  lines.push(`Pharmacy collection : ${num('cut_pharmacy_collection_count')}/ ${money(num('cut_pharmacy_collection_amount'))}`);
+  lines.push(`Medicine not purchased by: ${num('cut_medicine_not_purchased_by')}`);
+  lines.push(`Total collection= ${money(cutTotalColl)}`);
+  lines.push(`*Total Collection : ${money(totalCollection)}*`);
+  lines.push(`*Total Business : ${money(totalBusiness)}*`);
+
+  const staffName = document.getElementById('staff_name').value;
+  if(staffName){ lines.push(``); lines.push(`_Submitted by: ${staffName}_`); }
+
+  const text = encodeURIComponent(lines.join('\n'));
+  window.open(`https://wa.me/?text=${text}`, '_blank');
 });
 
 // NAV
