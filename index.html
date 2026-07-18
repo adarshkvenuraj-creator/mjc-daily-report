@@ -61,10 +61,35 @@
   .empty{text-align:center;padding:40px;color:var(--muted);}
   select{width:100%;padding:9px 10px;border:1px solid var(--border);border-radius:8px;font-size:.9rem;background:#fbfcfd;}
   @media(max-width:600px){header h1{font-size:1rem;} .grid{grid-template-columns:1fr 1fr;}}
+
+  /* LOGIN SCREEN */
+  #loginScreen{position:fixed;inset:0;background:linear-gradient(135deg,var(--navy),#1a4d7a);display:flex;align-items:center;justify-content:center;z-index:100;padding:16px;}
+  .login-card{background:#fff;border-radius:16px;padding:32px 28px;max-width:360px;width:100%;box-shadow:0 10px 40px rgba(0,0,0,.25);}
+  .login-card h2{margin:0 0 4px 0;color:var(--navy);font-size:1.3rem;}
+  .login-card p.hint{color:var(--muted);font-size:.82rem;margin:0 0 20px 0;}
+  .login-card label{margin-top:4px;}
+  .login-card input{margin-bottom:14px;font-size:1rem;padding:11px 12px;}
+  .login-card button{width:100%;padding:12px;background:var(--teal);color:#fff;border:none;border-radius:8px;font-weight:700;font-size:.95rem;cursor:pointer;}
+  .login-error{color:var(--red);font-size:.82rem;margin:-6px 0 12px 0;min-height:16px;}
+  #appWrap{display:none;}
+  .logout-btn{background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.35);padding:8px 12px;border-radius:8px;cursor:pointer;font-size:.8rem;font-weight:600;}
 </style>
 </head>
 <body>
 
+<!-- LOGIN SCREEN -->
+<div id="loginScreen">
+  <div class="login-card">
+    <h2>MJC Daily Report</h2>
+    <p class="hint">Enter your passcode to continue</p>
+    <label>Passcode</label>
+    <input type="password" id="loginPasscode" placeholder="Enter passcode" autocomplete="off" />
+    <div class="login-error" id="loginError"></div>
+    <button id="loginBtn">Log In</button>
+  </div>
+</div>
+
+<div id="appWrap">
 <header>
   <div>
     <h1>MJC Daily Report</h1>
@@ -72,7 +97,8 @@
   </div>
   <nav>
     <button id="navStaff" class="active">Staff Entry</button>
-    <button id="navAdmin">Admin Dashboard</button>
+    <button id="navAdmin" style="display:none;">Admin Dashboard</button>
+    <button id="logoutBtn" class="logout-btn">Log Out</button>
   </nav>
 </header>
 
@@ -213,6 +239,7 @@
     </div>
   </div>
 </main>
+</div>
 
 <div id="toast"></div>
 
@@ -221,6 +248,44 @@ const SUPABASE_URL = "https://ikrvqhuwhwahnyiozxci.supabase.co";
 const SUPABASE_KEY = "sb_publishable_MoyIWYtGWE6bYn7Gq_XHjg_4WRJj95Z";
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 const TABLE = "mjc_daily_reports";
+
+// AUTH
+const STAFF_CODE = "MJC@2026";
+const ADMIN_CODE = "ADMIN@2026";
+
+function applyRole(role){
+  sessionStorage.setItem('mjc_role', role);
+  document.getElementById('loginScreen').style.display = 'none';
+  document.getElementById('appWrap').style.display = 'block';
+  document.getElementById('navAdmin').style.display = (role === 'admin') ? 'inline-block' : 'none';
+}
+
+function tryLogin(){
+  const val = document.getElementById('loginPasscode').value.trim();
+  const errEl = document.getElementById('loginError');
+  if(val === ADMIN_CODE){ errEl.textContent=''; applyRole('admin'); return; }
+  if(val === STAFF_CODE){ errEl.textContent=''; applyRole('staff'); return; }
+  errEl.textContent = 'Incorrect passcode. Please try again.';
+}
+
+document.getElementById('loginBtn').addEventListener('click', tryLogin);
+document.getElementById('loginPasscode').addEventListener('keydown', (e)=>{ if(e.key === 'Enter') tryLogin(); });
+
+document.getElementById('logoutBtn').addEventListener('click', ()=>{
+  sessionStorage.removeItem('mjc_role');
+  document.getElementById('loginPasscode').value = '';
+  document.getElementById('appWrap').style.display = 'none';
+  document.getElementById('loginScreen').style.display = 'flex';
+  document.getElementById('navStaff').click();
+});
+
+// restore session if already logged in this tab
+const existingRole = sessionStorage.getItem('mjc_role');
+if(existingRole === 'admin' || existingRole === 'staff'){
+  applyRole(existingRole);
+} else {
+  document.getElementById('loginPasscode').focus();
+}
 
 const fields = [
   "diag_total_patients","diag_lab","diag_ecg","diag_xray","diag_cbct","diag_opg","diag_usg","diag_fnac","diag_biothesiometry",
@@ -384,6 +449,7 @@ document.getElementById('navStaff').addEventListener('click', ()=>{
   document.getElementById('headerSub').textContent = 'Staff Entry';
 });
 document.getElementById('navAdmin').addEventListener('click', ()=>{
+  if(sessionStorage.getItem('mjc_role') !== 'admin'){ toast('Admin access only', 'error'); return; }
   document.getElementById('staffView').style.display='none';
   document.getElementById('adminView').style.display='block';
   document.getElementById('navAdmin').classList.add('active');
