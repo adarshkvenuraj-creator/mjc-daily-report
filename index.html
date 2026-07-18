@@ -1,0 +1,446 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>MJC Daily Report</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+  :root{
+    --navy:#0f3057; --teal:#00a8a8; --bg:#f4f7fa; --card:#ffffff;
+    --text:#1c2b39; --muted:#64748b; --border:#e2e8f0; --green:#16a34a; --red:#dc2626;
+    --amber:#d97706;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;background:var(--bg);color:var(--text);}
+  header{background:linear-gradient(135deg,var(--navy),#1a4d7a);color:#fff;padding:16px 20px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;}
+  header h1{margin:0;font-size:1.2rem;font-weight:700;}
+  header .sub{font-size:.78rem;opacity:.85;margin-top:2px;}
+  nav{display:flex;gap:8px;}
+  nav button{background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.35);padding:8px 14px;border-radius:8px;cursor:pointer;font-size:.85rem;font-weight:600;}
+  nav button.active{background:#fff;color:var(--navy);}
+  main{max-width:960px;margin:0 auto;padding:16px;}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:18px;margin-bottom:16px;box-shadow:0 1px 2px rgba(0,0,0,.04);}
+  .section-title{display:flex;align-items:center;gap:8px;font-size:1rem;font-weight:700;color:var(--navy);margin:0 0 14px 0;padding-bottom:8px;border-bottom:2px solid var(--border);}
+  .dot{width:10px;height:10px;border-radius:50%;}
+  .dot.diag{background:#3b82f6;} .dot.opt{background:#8b5cf6;} .dot.cut{background:#ec4899;}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px;}
+  label{display:block;font-size:.75rem;color:var(--muted);margin-bottom:4px;font-weight:600;}
+  input[type=number],input[type=date],input[type=text]{width:100%;padding:9px 10px;border:1px solid var(--border);border-radius:8px;font-size:.9rem;background:#fbfcfd;}
+  input:focus{outline:2px solid var(--teal);border-color:var(--teal);}
+  .field{margin-bottom:2px;}
+  .calc-row{display:flex;justify-content:space-between;align-items:center;background:#f0f9f9;border:1px dashed var(--teal);border-radius:8px;padding:10px 14px;margin-top:12px;font-weight:700;color:var(--navy);}
+  .calc-row span.val{font-size:1.05rem;}
+  .totals-card{background:linear-gradient(135deg,#0f3057,#124a7a);color:#fff;}
+  .totals-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-top:10px;}
+  .totals-grid .item{background:rgba(255,255,255,.1);border-radius:10px;padding:12px 14px;}
+  .totals-grid .item .lbl{font-size:.72rem;opacity:.85;}
+  .totals-grid .item .amt{font-size:1.3rem;font-weight:800;margin-top:4px;}
+  .actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:6px;}
+  button.primary{background:var(--teal);color:#fff;border:none;padding:12px 20px;border-radius:8px;font-weight:700;font-size:.95rem;cursor:pointer;}
+  button.secondary{background:#fff;color:var(--navy);border:2px solid var(--navy);padding:11px 20px;border-radius:8px;font-weight:700;font-size:.95rem;cursor:pointer;}
+  button:disabled{opacity:.5;cursor:not-allowed;}
+  #toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--navy);color:#fff;padding:12px 22px;border-radius:8px;font-size:.9rem;display:none;z-index:50;box-shadow:0 4px 14px rgba(0,0,0,.2);}
+  #toast.error{background:var(--red);}
+  #toast.success{background:var(--green);}
+  table{width:100%;border-collapse:collapse;font-size:.82rem;}
+  th,td{padding:8px 10px;text-align:right;border-bottom:1px solid var(--border);white-space:nowrap;}
+  th:first-child,td:first-child{text-align:left;position:sticky;left:0;background:inherit;}
+  thead th{background:var(--navy);color:#fff;position:sticky;top:0;}
+  tbody tr:nth-child(even){background:#f8fafc;}
+  tbody tr:hover{background:#eef6f6;}
+  .table-wrap{overflow:auto;max-height:70vh;border-radius:10px;border:1px solid var(--border);}
+  .stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:16px;}
+  .stat{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px;}
+  .stat .lbl{font-size:.72rem;color:var(--muted);font-weight:600;}
+  .stat .val{font-size:1.4rem;font-weight:800;color:var(--navy);margin-top:4px;}
+  .live-dot{width:8px;height:8px;border-radius:50%;background:var(--green);display:inline-block;margin-right:6px;animation:pulse 1.5s infinite;}
+  @keyframes pulse{0%{opacity:1;}50%{opacity:.3;}100%{opacity:1;}}
+  .row-actions button{background:none;border:none;color:var(--teal);cursor:pointer;font-size:.78rem;font-weight:700;}
+  .empty{text-align:center;padding:40px;color:var(--muted);}
+  select{width:100%;padding:9px 10px;border:1px solid var(--border);border-radius:8px;font-size:.9rem;background:#fbfcfd;}
+  @media(max-width:600px){header h1{font-size:1rem;} .grid{grid-template-columns:1fr 1fr;}}
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>MJC Daily Report</h1>
+    <div class="sub" id="headerSub">Staff Entry</div>
+  </div>
+  <nav>
+    <button id="navStaff" class="active">Staff Entry</button>
+    <button id="navAdmin">Admin Dashboard</button>
+  </nav>
+</header>
+
+<main>
+  <!-- STAFF VIEW -->
+  <div id="staffView">
+
+    <div class="card">
+      <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(220px,1fr));">
+        <div class="field">
+          <label>Report Date</label>
+          <input type="date" id="report_date" />
+        </div>
+        <div class="field">
+          <label>Staff Name (optional)</label>
+          <input type="text" id="staff_name" placeholder="Your name" />
+        </div>
+      </div>
+    </div>
+
+    <!-- DIAGNOSTICS -->
+    <div class="card">
+      <div class="section-title"><span class="dot diag"></span> Diagnostics</div>
+      <div class="grid">
+        <div class="field"><label>Total Patients</label><input type="number" id="diag_total_patients" value="0"></div>
+        <div class="field"><label>Lab</label><input type="number" id="diag_lab" value="0"></div>
+        <div class="field"><label>ECG</label><input type="number" id="diag_ecg" value="0"></div>
+        <div class="field"><label>X-Ray</label><input type="number" id="diag_xray" value="0"></div>
+        <div class="field"><label>CBCT</label><input type="number" id="diag_cbct" value="0"></div>
+        <div class="field"><label>OPG</label><input type="number" id="diag_opg" value="0"></div>
+        <div class="field"><label>USG</label><input type="number" id="diag_usg" value="0"></div>
+        <div class="field"><label>FNAC</label><input type="number" id="diag_fnac" value="0"></div>
+        <div class="field"><label>Biothesiometry</label><input type="number" id="diag_biothesiometry" value="0"></div>
+        <div class="field"><label>Collection (₹)</label><input type="number" id="diag_collection" value="0"></div>
+        <div class="field"><label>Today Pending (₹)</label><input type="number" id="diag_today_pending" value="0"></div>
+        <div class="field"><label>Previous Pending Collected (₹)</label><input type="number" id="diag_previous_pending_collected" value="0"></div>
+        <div class="field"><label>Mercy Hospital Total</label><input type="number" id="diag_mercy_hospital_total" value="0"></div>
+        <div class="field"><label>Govt. Taluk Hospital</label><input type="number" id="diag_govt_taluk_hospital" value="0"></div>
+        <div class="field"><label>Google Review</label><input type="number" id="diag_google_review" value="0"></div>
+        <div class="field"><label>Home Collection</label><input type="number" id="diag_home_collection" value="0"></div>
+        <div class="field"><label>Tomorrow Home Collection Booked</label><input type="number" id="diag_tomorrow_home_collection_booked" value="0"></div>
+      </div>
+    </div>
+
+    <!-- OPTICALS -->
+    <div class="card">
+      <div class="section-title"><span class="dot opt"></span> Opticals / Eye Care</div>
+      <div class="grid">
+        <div class="field"><label>Dr Consultation - Count</label><input type="number" id="opt_dr_consultation_count" value="0"></div>
+        <div class="field"><label>Dr Consultation - Amount (₹)</label><input type="number" id="opt_dr_consultation_amount" value="0"></div>
+        <div class="field"><label>Refraction / Out</label><input type="number" id="opt_refraction_out" value="0"></div>
+        <div class="field"><label>Camp</label><input type="number" id="opt_camp" value="0"></div>
+        <div class="field"><label>No. of Customers</label><input type="number" id="opt_no_of_customers" value="0"></div>
+        <div class="field"><label>Order Value (₹)</label><input type="number" id="opt_order_value" value="0"></div>
+        <div class="field"><label>Order Advance (₹)</label><input type="number" id="opt_order_advance" value="0"></div>
+        <div class="field"><label>Sale (₹)</label><input type="number" id="opt_sale" value="0"></div>
+        <div class="field"><label>Pharmacy (₹)</label><input type="number" id="opt_pharmacy" value="0"></div>
+        <div class="field"><label>Google Review</label><input type="number" id="opt_google_review" value="0"></div>
+        <div class="field"><label>Cutique Service</label><input type="number" id="opt_cutique_service" value="0"></div>
+        <div class="field"><label>Sale from Cutique (₹)</label><input type="number" id="opt_sale_from_cutique" value="0"></div>
+        <div class="field"><label>Walkins</label><input type="number" id="opt_walkins" value="0"></div>
+      </div>
+      <div class="calc-row"><span>Opticals Collection (auto)</span><span class="val" id="opt_collection_display">₹0</span></div>
+    </div>
+
+    <!-- CUTIQUE -->
+    <div class="card">
+      <div class="section-title"><span class="dot cut"></span> Cutique</div>
+      <div class="grid">
+        <div class="field"><label>No. of Patients</label><input type="number" id="cut_no_of_patients" value="0"></div>
+        <div class="field"><label>No. of Procedures</label><input type="number" id="cut_no_of_procedures" value="0"></div>
+        <div class="field"><label>AI Face</label><input type="number" id="cut_ai_face" value="0"></div>
+        <div class="field"><label>Google Review</label><input type="number" id="cut_google_review" value="0"></div>
+        <div class="field"><label>Cash (₹)</label><input type="number" id="cut_cash" value="0"></div>
+        <div class="field"><label>Card (₹)</label><input type="number" id="cut_card" value="0"></div>
+        <div class="field"><label>GPay (₹)</label><input type="number" id="cut_gpay" value="0"></div>
+        <div class="field"><label>Pharmacy Collection - Count</label><input type="number" id="cut_pharmacy_collection_count" value="0"></div>
+        <div class="field"><label>Pharmacy Collection - Amount (₹)</label><input type="number" id="cut_pharmacy_collection_amount" value="0"></div>
+        <div class="field"><label>Medicine Not Purchased By</label><input type="number" id="cut_medicine_not_purchased_by" value="0"></div>
+      </div>
+      <div class="calc-row"><span>Cutique Collection (Cash+Card+GPay)</span><span class="val" id="cut_collection_display">₹0</span></div>
+      <div class="calc-row"><span>Cutique Total Collection (incl. Pharmacy)</span><span class="val" id="cut_total_collection_display">₹0</span></div>
+    </div>
+
+    <!-- TOTALS -->
+    <div class="card totals-card">
+      <div class="section-title" style="color:#fff;border-color:rgba(255,255,255,.3);">Auto-Calculated Totals</div>
+      <div class="totals-grid">
+        <div class="item"><div class="lbl">Diagnostics Collection</div><div class="amt" id="t_diag">₹0</div></div>
+        <div class="item"><div class="lbl">Opticals Collection</div><div class="amt" id="t_opt">₹0</div></div>
+        <div class="item"><div class="lbl">Cutique Collection</div><div class="amt" id="t_cut">₹0</div></div>
+        <div class="item"><div class="lbl">Total Collection</div><div class="amt" id="t_total_collection">₹0</div></div>
+        <div class="item"><div class="lbl">Total Business</div><div class="amt" id="t_total_business">₹0</div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="actions">
+        <button class="primary" id="saveBtn">💾 Save Report</button>
+        <button class="secondary" id="pdfBtn">📄 Export as PDF</button>
+        <button class="secondary" id="loadBtn">🔄 Load Existing Date</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ADMIN VIEW -->
+  <div id="adminView" style="display:none;">
+    <div class="card">
+      <div class="section-title" style="border:none;margin:0;">
+        <span class="live-dot"></span> Live — updates automatically when staff save
+      </div>
+    </div>
+
+    <div class="stat-grid">
+      <div class="stat"><div class="lbl">Reports Logged</div><div class="val" id="s_count">0</div></div>
+      <div class="stat"><div class="lbl">Total Collection (all)</div><div class="val" id="s_collection">₹0</div></div>
+      <div class="stat"><div class="lbl">Total Business (all)</div><div class="val" id="s_business">₹0</div></div>
+      <div class="stat"><div class="lbl">Avg / Day</div><div class="val" id="s_avg">₹0</div></div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">Daily Reports</div>
+      <div class="table-wrap">
+        <table id="adminTable">
+          <thead>
+            <tr>
+              <th>Date</th><th>Staff</th>
+              <th>Diag Pts</th><th>Diag Coll</th>
+              <th>Opt Coll</th>
+              <th>Cut Coll</th><th>Cut Total</th>
+              <th>Total Collection</th><th>Total Business</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="adminTbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</main>
+
+<div id="toast"></div>
+
+<script>
+const SUPABASE_URL = "https://ikrvqhuwhwahnyiozxci.supabase.co";
+const SUPABASE_KEY = "sb_publishable_MoyIWYtGWE6bYn7Gq_XHjg_4WRJj95Z";
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const TABLE = "mjc_daily_reports";
+
+const fields = [
+  "diag_total_patients","diag_lab","diag_ecg","diag_xray","diag_cbct","diag_opg","diag_usg","diag_fnac","diag_biothesiometry",
+  "diag_collection","diag_today_pending","diag_previous_pending_collected","diag_mercy_hospital_total","diag_govt_taluk_hospital",
+  "diag_google_review","diag_home_collection","diag_tomorrow_home_collection_booked",
+  "opt_dr_consultation_count","opt_dr_consultation_amount","opt_refraction_out","opt_camp","opt_no_of_customers",
+  "opt_order_value","opt_order_advance","opt_sale","opt_pharmacy","opt_google_review","opt_cutique_service","opt_sale_from_cutique","opt_walkins",
+  "cut_no_of_patients","cut_no_of_procedures","cut_ai_face","cut_google_review","cut_cash","cut_card","cut_gpay",
+  "cut_pharmacy_collection_count","cut_pharmacy_collection_amount","cut_medicine_not_purchased_by"
+];
+
+function toast(msg, type){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = type || '';
+  t.style.display = 'block';
+  setTimeout(()=>{ t.style.display='none'; }, 3200);
+}
+function money(n){ return '₹' + Number(n||0).toLocaleString('en-IN'); }
+function num(id){ return Number(document.getElementById(id).value || 0); }
+
+function recalc(){
+  const optColl = num('opt_dr_consultation_amount') + num('opt_order_advance') + num('opt_sale') + num('opt_pharmacy');
+  const cutColl = num('cut_cash') + num('cut_card') + num('cut_gpay');
+  const cutTotalColl = cutColl + num('cut_pharmacy_collection_amount');
+  const totalCollection = num('diag_collection') + optColl + cutTotalColl;
+  const totalBusiness = num('diag_collection') + num('opt_dr_consultation_amount') + num('opt_order_value') + num('opt_sale') + num('opt_pharmacy') + cutTotalColl;
+
+  document.getElementById('opt_collection_display').textContent = money(optColl);
+  document.getElementById('cut_collection_display').textContent = money(cutColl);
+  document.getElementById('cut_total_collection_display').textContent = money(cutTotalColl);
+  document.getElementById('t_diag').textContent = money(num('diag_collection'));
+  document.getElementById('t_opt').textContent = money(optColl);
+  document.getElementById('t_cut').textContent = money(cutTotalColl);
+  document.getElementById('t_total_collection').textContent = money(totalCollection);
+  document.getElementById('t_total_business').textContent = money(totalBusiness);
+}
+
+fields.forEach(f=>{
+  const el = document.getElementById(f);
+  if(el) el.addEventListener('input', recalc);
+});
+
+// default date = today
+document.getElementById('report_date').value = new Date().toISOString().slice(0,10);
+recalc();
+
+// SAVE
+document.getElementById('saveBtn').addEventListener('click', async ()=>{
+  const report_date = document.getElementById('report_date').value;
+  if(!report_date){ toast('Please select a date', 'error'); return; }
+  const payload = { report_date, staff_name: document.getElementById('staff_name').value || null };
+  fields.forEach(f=>{ payload[f] = num(f); });
+
+  const btn = document.getElementById('saveBtn');
+  btn.disabled = true; btn.textContent = 'Saving...';
+  const { error } = await sb.from(TABLE).upsert(payload, { onConflict: 'report_date' });
+  btn.disabled = false; btn.textContent = '💾 Save Report';
+
+  if(error){ toast('Save failed: ' + error.message, 'error'); }
+  else{ toast('Saved for ' + report_date, 'success'); }
+});
+
+// LOAD EXISTING
+document.getElementById('loadBtn').addEventListener('click', async ()=>{
+  const report_date = document.getElementById('report_date').value;
+  if(!report_date){ toast('Pick a date first', 'error'); return; }
+  const { data, error } = await sb.from(TABLE).select('*').eq('report_date', report_date).maybeSingle();
+  if(error){ toast('Load failed: ' + error.message, 'error'); return; }
+  if(!data){ toast('No report found for ' + report_date, 'error'); return; }
+  document.getElementById('staff_name').value = data.staff_name || '';
+  fields.forEach(f=>{ if(document.getElementById(f)) document.getElementById(f).value = data[f] ?? 0; });
+  recalc();
+  toast('Loaded ' + report_date, 'success');
+});
+
+// PDF EXPORT
+document.getElementById('pdfBtn').addEventListener('click', ()=>{
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+  const date = document.getElementById('report_date').value;
+  const staff = document.getElementById('staff_name').value;
+  let y = 15;
+
+  doc.setFontSize(16); doc.setFont(undefined,'bold');
+  doc.text('MJC Daily Report', 14, y); y+=7;
+  doc.setFontSize(10); doc.setFont(undefined,'normal');
+  doc.text('Date: ' + date + (staff ? '   |   Staff: ' + staff : ''), 14, y); y+=10;
+
+  function section(title, rows){
+    doc.setFontSize(12); doc.setFont(undefined,'bold');
+    doc.setTextColor(15,48,87);
+    doc.text(title, 14, y); y+=6;
+    doc.setDrawColor(200); doc.line(14,y-3,196,y-3);
+    doc.setFontSize(9.5); doc.setFont(undefined,'normal'); doc.setTextColor(30,30,30);
+    rows.forEach(([label,val])=>{
+      if(y > 280){ doc.addPage(); y = 15; }
+      doc.text(label, 16, y);
+      doc.text(String(val), 190, y, { align:'right' });
+      y += 5.5;
+    });
+    y += 5;
+  }
+
+  const optColl = num('opt_dr_consultation_amount') + num('opt_order_advance') + num('opt_sale') + num('opt_pharmacy');
+  const cutColl = num('cut_cash') + num('cut_card') + num('cut_gpay');
+  const cutTotalColl = cutColl + num('cut_pharmacy_collection_amount');
+  const totalCollection = num('diag_collection') + optColl + cutTotalColl;
+  const totalBusiness = num('diag_collection') + num('opt_dr_consultation_amount') + num('opt_order_value') + num('opt_sale') + num('opt_pharmacy') + cutTotalColl;
+
+  section('Diagnostics', [
+    ['Total Patients', num('diag_total_patients')],
+    ['Lab', num('diag_lab')], ['ECG', num('diag_ecg')], ['X-Ray', num('diag_xray')],
+    ['CBCT', num('diag_cbct')], ['OPG', num('diag_opg')], ['USG', num('diag_usg')],
+    ['FNAC', num('diag_fnac')], ['Biothesiometry', num('diag_biothesiometry')],
+    ['Collection', money(num('diag_collection'))],
+    ['Today Pending', money(num('diag_today_pending'))],
+    ['Previous Pending Collected', money(num('diag_previous_pending_collected'))],
+    ['Mercy Hospital Total', num('diag_mercy_hospital_total')],
+    ['Govt. Taluk Hospital', num('diag_govt_taluk_hospital')],
+    ['Google Review', num('diag_google_review')],
+    ['Home Collection', num('diag_home_collection')],
+    ['Tomorrow Home Collection Booked', num('diag_tomorrow_home_collection_booked')],
+  ]);
+
+  section('Opticals / Eye Care', [
+    ['Dr Consultation (count / amount)', num('opt_dr_consultation_count') + ' / ' + money(num('opt_dr_consultation_amount'))],
+    ['Refraction/Out', num('opt_refraction_out')], ['Camp', num('opt_camp')],
+    ['No. of Customers', num('opt_no_of_customers')],
+    ['Order Value', money(num('opt_order_value'))], ['Order Advance', money(num('opt_order_advance'))],
+    ['Sale', money(num('opt_sale'))], ['Pharmacy', money(num('opt_pharmacy'))],
+    ['Google Review', num('opt_google_review')], ['Cutique Service', num('opt_cutique_service')],
+    ['Sale from Cutique', money(num('opt_sale_from_cutique'))], ['Walkins', num('opt_walkins')],
+    ['Opticals Collection (auto)', money(optColl)],
+  ]);
+
+  section('Cutique', [
+    ['No. of Patients', num('cut_no_of_patients')], ['No. of Procedures', num('cut_no_of_procedures')],
+    ['AI Face', num('cut_ai_face')], ['Google Review', num('cut_google_review')],
+    ['Cash', money(num('cut_cash'))], ['Card', money(num('cut_card'))], ['GPay', money(num('cut_gpay'))],
+    ['Cutique Collection (auto)', money(cutColl)],
+    ['Pharmacy Collection (count / amount)', num('cut_pharmacy_collection_count') + ' / ' + money(num('cut_pharmacy_collection_amount'))],
+    ['Medicine Not Purchased By', num('cut_medicine_not_purchased_by')],
+    ['Cutique Total Collection (auto)', money(cutTotalColl)],
+  ]);
+
+  section('Grand Totals', [
+    ['Total Collection', money(totalCollection)],
+    ['Total Business', money(totalBusiness)],
+  ]);
+
+  doc.save('MJC_Daily_Report_' + date + '.pdf');
+});
+
+// NAV
+document.getElementById('navStaff').addEventListener('click', ()=>{
+  document.getElementById('staffView').style.display='block';
+  document.getElementById('adminView').style.display='none';
+  document.getElementById('navStaff').classList.add('active');
+  document.getElementById('navAdmin').classList.remove('active');
+  document.getElementById('headerSub').textContent = 'Staff Entry';
+});
+document.getElementById('navAdmin').addEventListener('click', ()=>{
+  document.getElementById('staffView').style.display='none';
+  document.getElementById('adminView').style.display='block';
+  document.getElementById('navAdmin').classList.add('active');
+  document.getElementById('navStaff').classList.remove('active');
+  document.getElementById('headerSub').textContent = 'Admin Dashboard';
+  loadAdminData();
+});
+
+// ADMIN DATA + REALTIME
+async function loadAdminData(){
+  const { data, error } = await sb.from(TABLE).select('*').order('report_date', { ascending:false });
+  if(error){ toast('Load failed: ' + error.message, 'error'); return; }
+  renderAdmin(data || []);
+}
+
+function renderAdmin(rows){
+  const tbody = document.getElementById('adminTbody');
+  if(!rows.length){
+    tbody.innerHTML = '<tr><td colspan="10" class="empty">No reports yet</td></tr>';
+  } else {
+    tbody.innerHTML = rows.map(r=>`
+      <tr>
+        <td style="text-align:left">${r.report_date}</td>
+        <td style="text-align:left">${r.staff_name || '-'}</td>
+        <td>${r.diag_total_patients}</td>
+        <td>${money(r.diag_collection)}</td>
+        <td>${money(r.opt_collection)}</td>
+        <td>${money(r.cut_collection)}</td>
+        <td>${money(r.cut_total_collection)}</td>
+        <td><strong>${money(r.total_collection)}</strong></td>
+        <td><strong>${money(r.total_business)}</strong></td>
+        <td class="row-actions"><button onclick="editRow('${r.report_date}')">Edit</button></td>
+      </tr>
+    `).join('');
+  }
+  const count = rows.length;
+  const totalCollection = rows.reduce((s,r)=>s+Number(r.total_collection||0),0);
+  const totalBusiness = rows.reduce((s,r)=>s+Number(r.total_business||0),0);
+  document.getElementById('s_count').textContent = count;
+  document.getElementById('s_collection').textContent = money(totalCollection);
+  document.getElementById('s_business').textContent = money(totalBusiness);
+  document.getElementById('s_avg').textContent = money(count ? totalCollection/count : 0);
+}
+
+window.editRow = function(date){
+  document.getElementById('navStaff').click();
+  document.getElementById('report_date').value = date;
+  document.getElementById('loadBtn').click();
+};
+
+sb.channel('mjc_daily_reports_changes')
+  .on('postgres_changes', { event:'*', schema:'public', table:TABLE }, ()=>{
+    if(document.getElementById('adminView').style.display !== 'none'){
+      loadAdminData();
+    }
+  })
+  .subscribe();
+</script>
+</body>
+</html>
