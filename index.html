@@ -104,6 +104,16 @@
   .chart-wrap{position:relative;height:320px;margin-top:6px;}
   .danger-zone{border:1px solid #fecaca;background:#fef2f2;border-radius:12px;padding:18px;}
   .danger-zone .section-title{color:var(--red);border-color:#fecaca;}
+
+  /* TRENDS FILTER BAR */
+  .filter-bar{display:flex;flex-wrap:wrap;align-items:flex-end;gap:12px;}
+  .filter-mode-toggle{display:flex;gap:8px;margin-bottom:4px;}
+  .filter-mode-toggle button{background:#fff;color:var(--navy);border:2px solid var(--border);padding:7px 14px;border-radius:8px;font-weight:600;font-size:.82rem;cursor:pointer;}
+  .filter-mode-toggle button.active{border-color:var(--teal);background:#f0f9f9;color:var(--teal);}
+  .filter-field{min-width:150px;}
+  .filter-field label{display:block;font-size:.72rem;color:var(--muted);font-weight:600;margin-bottom:4px;}
+  .filter-field input, .filter-field select{padding:9px 10px;border:1px solid var(--border);border-radius:8px;font-size:.88rem;width:100%;}
+  .export-pdf-btn{background:var(--navy);color:#fff;border:none;padding:10px 18px;border-radius:8px;font-weight:700;font-size:.88rem;cursor:pointer;white-space:nowrap;}
 </style>
 </head>
 <body>
@@ -280,6 +290,30 @@
 
   <!-- TRENDS VIEW -->
   <div id="trendsView" style="display:none;">
+    <div class="card">
+      <div class="section-title">Filter & Export</div>
+      <div class="filter-mode-toggle">
+        <button id="filterModeAll" class="active">All Data</button>
+        <button id="filterModeMonth">Month-wise</button>
+        <button id="filterModeRange">Date Range</button>
+      </div>
+      <div class="filter-bar">
+        <div class="filter-field" id="filterMonthField" style="display:none;">
+          <label>Select Month</label>
+          <input type="month" id="filterMonth" />
+        </div>
+        <div class="filter-field" id="filterFromField" style="display:none;">
+          <label>From Date</label>
+          <input type="date" id="filterFrom" />
+        </div>
+        <div class="filter-field" id="filterToField" style="display:none;">
+          <label>To Date</label>
+          <input type="date" id="filterTo" />
+        </div>
+        <button class="export-pdf-btn" id="trendsPdfBtn">📄 Export Trends as PDF</button>
+      </div>
+    </div>
+
     <div class="card projection-card">
       <div class="section-title" style="color:#fff;border-color:rgba(255,255,255,.3);">📈 This Month's Projection</div>
       <div class="projection-grid">
@@ -763,12 +797,58 @@ document.getElementById('deleteAllConfirmBtn').addEventListener('click', async (
 
 // TRENDS + PROJECTION
 let trendChartInstance = null;
+let allTrendRows = [];
+let trendFilterMode = 'all'; // 'all' | 'month' | 'range'
 
 async function loadTrendsData(){
   const { data, error } = await sb.from(TABLE).select('*').order('report_date', { ascending:true });
   if(error){ toast('Load failed: ' + error.message, 'error'); return; }
-  renderTrends(data || []);
+  allTrendRows = data || [];
+  applyTrendFilter();
 }
+
+function getFilteredTrendRows(){
+  if(trendFilterMode === 'month'){
+    const mVal = document.getElementById('filterMonth').value; // "YYYY-MM"
+    if(!mVal) return allTrendRows;
+    return allTrendRows.filter(r => r.report_date.slice(0,7) === mVal);
+  }
+  if(trendFilterMode === 'range'){
+    const from = document.getElementById('filterFrom').value;
+    const to = document.getElementById('filterTo').value;
+    return allTrendRows.filter(r => {
+      if(from && r.report_date < from) return false;
+      if(to && r.report_date > to) return false;
+      return true;
+    });
+  }
+  return allTrendRows;
+}
+
+function applyTrendFilter(){
+  renderTrends(getFilteredTrendRows());
+}
+
+function setTrendFilterMode(mode){
+  trendFilterMode = mode;
+  document.getElementById('filterModeAll').classList.toggle('active', mode === 'all');
+  document.getElementById('filterModeMonth').classList.toggle('active', mode === 'month');
+  document.getElementById('filterModeRange').classList.toggle('active', mode === 'range');
+  document.getElementById('filterMonthField').style.display = mode === 'month' ? 'block' : 'none';
+  document.getElementById('filterFromField').style.display = mode === 'range' ? 'block' : 'none';
+  document.getElementById('filterToField').style.display = mode === 'range' ? 'block' : 'none';
+  applyTrendFilter();
+}
+
+document.getElementById('filterModeAll').addEventListener('click', ()=>setTrendFilterMode('all'));
+document.getElementById('filterModeMonth').addEventListener('click', ()=>setTrendFilterMode('month'));
+document.getElementById('filterModeRange').addEventListener('click', ()=>setTrendFilterMode('range'));
+document.getElementById('filterMonth').addEventListener('change', applyTrendFilter);
+document.getElementById('filterFrom').addEventListener('change', applyTrendFilter);
+document.getElementById('filterTo').addEventListener('change', applyTrendFilter);
+
+// default month filter = current month
+document.getElementById('filterMonth').value = new Date().toISOString().slice(0,7);
 
 function renderTrends(rows){
   // Chart + table (all data, chronological)
@@ -836,6 +916,104 @@ function renderTrends(rows){
     ? `Based on ${daysLoggedThisMonth} day(s) logged this month (avg ₹${Math.round(avgDaily).toLocaleString('en-IN')}/day) × ${daysRemaining} day(s) remaining.`
     : 'No entries logged yet this month — projection will appear once data is saved.';
 }
+
+// TRENDS PDF EXPORT
+document.getElementById('trendsPdfBtn').addEventListener('click', ()=>{
+  const rows = getFilteredTrendRows();
+  if(!rows.length){ toast('No data to export for this selection', 'error'); return; }
+
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+  let y = 15;
+
+  let rangeLabel = 'All Data';
+  if(trendFilterMode === 'month'){
+    const mVal = document.getElementById('filterMonth').value;
+    if(mVal){
+      const [yy,mm] = mVal.split('-');
+      const monthName = new Date(Number(yy), Number(mm)-1, 1).toLocaleString('en-US', { month:'long', year:'numeric' });
+      rangeLabel = monthName;
+    }
+  } else if(trendFilterMode === 'range'){
+    const from = document.getElementById('filterFrom').value || '(start)';
+    const to = document.getElementById('filterTo').value || '(latest)';
+    rangeLabel = `${from} to ${to}`;
+  }
+
+  doc.setFontSize(16); doc.setFont(undefined,'bold');
+  doc.text('MJC Daily Report — Trends', 14, y); y+=7;
+  doc.setFontSize(10); doc.setFont(undefined,'normal');
+  doc.text('Period: ' + rangeLabel, 14, y); y+=6;
+  doc.text('Generated: ' + new Date().toLocaleString('en-IN'), 14, y); y+=10;
+
+  const diagTotal = rows.reduce((s,r)=>s+Number(r.diag_collection||0),0);
+  const optTotal = rows.reduce((s,r)=>s+Number(r.opt_collection||0),0);
+  const cutTotal = rows.reduce((s,r)=>s+Number(r.cut_total_collection||0),0);
+  const collTotal = rows.reduce((s,r)=>s+Number(r.total_collection||0),0);
+  const busTotal = rows.reduce((s,r)=>s+Number(r.total_business||0),0);
+
+  doc.setFontSize(12); doc.setFont(undefined,'bold'); doc.setTextColor(15,48,87);
+  doc.text('Summary', 14, y); y+=6;
+  doc.setDrawColor(200); doc.line(14,y-3,196,y-3);
+  doc.setFontSize(9.5); doc.setFont(undefined,'normal'); doc.setTextColor(30,30,30);
+  const summaryRows = [
+    ['Days in Selection', String(rows.length)],
+    ['Diagnostics Collection', money(diagTotal)],
+    ['Opticals Collection', money(optTotal)],
+    ['Cutique Collection', money(cutTotal)],
+    ['Total Collection', money(collTotal)],
+    ['Total Business', money(busTotal)],
+    ['Average Daily Collection', money(rows.length ? collTotal/rows.length : 0)],
+  ];
+  summaryRows.forEach(([label,val])=>{
+    doc.text(label, 16, y);
+    doc.text(String(val), 190, y, { align:'right' });
+    y += 5.5;
+  });
+  y += 6;
+
+  doc.setFontSize(12); doc.setFont(undefined,'bold'); doc.setTextColor(15,48,87);
+  doc.text('Daily Breakdown', 14, y); y+=6;
+  doc.setDrawColor(200); doc.line(14,y-3,196,y-3);
+  y += 2;
+
+  doc.setFontSize(8.5); doc.setFont(undefined,'bold'); doc.setTextColor(255,255,255);
+  doc.setFillColor(15,48,87);
+  doc.rect(14, y-4, 182, 6, 'F');
+  doc.text('Date', 16, y);
+  doc.text('Diagnostics', 90, y, { align:'right' });
+  doc.text('Opticals', 120, y, { align:'right' });
+  doc.text('Cutique', 150, y, { align:'right' });
+  doc.text('Total', 194, y, { align:'right' });
+  y += 6;
+
+  doc.setFont(undefined,'normal'); doc.setTextColor(30,30,30);
+  rows.forEach((r, idx)=>{
+    if(y > 280){
+      doc.addPage(); y = 15;
+      doc.setFontSize(8.5); doc.setFont(undefined,'bold'); doc.setTextColor(255,255,255);
+      doc.setFillColor(15,48,87);
+      doc.rect(14, y-4, 182, 6, 'F');
+      doc.text('Date', 16, y);
+      doc.text('Diagnostics', 90, y, { align:'right' });
+      doc.text('Opticals', 120, y, { align:'right' });
+      doc.text('Cutique', 150, y, { align:'right' });
+      doc.text('Total', 194, y, { align:'right' });
+      y += 6;
+      doc.setFont(undefined,'normal'); doc.setTextColor(30,30,30);
+    }
+    if(idx % 2 === 0){ doc.setFillColor(248,250,252); doc.rect(14, y-4, 182, 5.5, 'F'); }
+    doc.text(r.report_date, 16, y);
+    doc.text(money(r.diag_collection), 90, y, { align:'right' });
+    doc.text(money(r.opt_collection), 120, y, { align:'right' });
+    doc.text(money(r.cut_total_collection), 150, y, { align:'right' });
+    doc.text(money(r.total_collection), 194, y, { align:'right' });
+    y += 5.5;
+  });
+
+  const filenameSafe = rangeLabel.replace(/[^a-zA-Z0-9]+/g, '_');
+  doc.save('MJC_Trends_' + filenameSafe + '.pdf');
+});
 
 sb.channel('mjc_daily_reports_changes')
   .on('postgres_changes', { event:'*', schema:'public', table:TABLE }, ()=>{
