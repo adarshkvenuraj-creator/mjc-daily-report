@@ -1,0 +1,1030 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>MJC Daily Report</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<style>
+  :root{
+    --navy:#0f3057; --teal:#00a8a8; --bg:#f4f7fa; --card:#ffffff;
+    --text:#1c2b39; --muted:#64748b; --border:#e2e8f0; --green:#16a34a; --red:#dc2626;
+    --amber:#d97706;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;background:var(--bg);color:var(--text);}
+  header{background:linear-gradient(135deg,var(--navy),#1a4d7a);color:#fff;padding:16px 20px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;}
+  header h1{margin:0;font-size:1.2rem;font-weight:700;}
+  header .sub{font-size:.78rem;opacity:.85;margin-top:2px;}
+  nav{display:flex;gap:8px;}
+  nav button{background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.35);padding:8px 14px;border-radius:8px;cursor:pointer;font-size:.85rem;font-weight:600;}
+  nav button.active{background:#fff;color:var(--navy);}
+  main{max-width:960px;margin:0 auto;padding:16px;}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:18px;margin-bottom:16px;box-shadow:0 1px 2px rgba(0,0,0,.04);}
+  .section-title{display:flex;align-items:center;gap:8px;font-size:1rem;font-weight:700;color:var(--navy);margin:0 0 14px 0;padding-bottom:8px;border-bottom:2px solid var(--border);}
+  .dot{width:10px;height:10px;border-radius:50%;}
+  .dot.diag{background:#3b82f6;} .dot.opt{background:#8b5cf6;} .dot.cut{background:#ec4899;}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px;}
+  label{display:block;font-size:.75rem;color:var(--muted);margin-bottom:4px;font-weight:600;}
+  input[type=number],input[type=date],input[type=text]{width:100%;padding:9px 10px;border:1px solid var(--border);border-radius:8px;font-size:.9rem;background:#fbfcfd;}
+  input:focus{outline:2px solid var(--teal);border-color:var(--teal);}
+  .field{margin-bottom:2px;}
+  .calc-row{display:flex;justify-content:space-between;align-items:center;background:#f0f9f9;border:1px dashed var(--teal);border-radius:8px;padding:10px 14px;margin-top:12px;font-weight:700;color:var(--navy);}
+  .calc-row span.val{font-size:1.05rem;}
+  .totals-card{background:linear-gradient(135deg,#0f3057,#124a7a);color:#fff;}
+  .totals-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-top:10px;}
+  .totals-grid .item{background:rgba(255,255,255,.1);border-radius:10px;padding:12px 14px;}
+  .totals-grid .item .lbl{font-size:.72rem;opacity:.85;}
+  .totals-grid .item .amt{font-size:1.3rem;font-weight:800;margin-top:4px;}
+  .actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:6px;}
+  button.primary{background:var(--teal);color:#fff;border:none;padding:12px 20px;border-radius:8px;font-weight:700;font-size:.95rem;cursor:pointer;}
+  button.secondary{background:#fff;color:var(--navy);border:2px solid var(--navy);padding:11px 20px;border-radius:8px;font-weight:700;font-size:.95rem;cursor:pointer;}
+  button:disabled{opacity:.5;cursor:not-allowed;}
+  #toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--navy);color:#fff;padding:12px 22px;border-radius:8px;font-size:.9rem;display:none;z-index:50;box-shadow:0 4px 14px rgba(0,0,0,.2);}
+  #toast.error{background:var(--red);}
+  #toast.success{background:var(--green);}
+  table{width:100%;border-collapse:collapse;font-size:.82rem;}
+  th,td{padding:8px 10px;text-align:right;border-bottom:1px solid var(--border);white-space:nowrap;}
+  th:first-child,td:first-child{text-align:left;position:sticky;left:0;background:inherit;}
+  thead th{background:var(--navy);color:#fff;position:sticky;top:0;}
+  tbody tr:nth-child(even){background:#f8fafc;}
+  tbody tr:hover{background:#eef6f6;}
+  .table-wrap{overflow:auto;max-height:70vh;border-radius:10px;border:1px solid var(--border);}
+  .stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:16px;}
+  .stat{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px;}
+  .stat .lbl{font-size:.72rem;color:var(--muted);font-weight:600;}
+  .stat .val{font-size:1.4rem;font-weight:800;color:var(--navy);margin-top:4px;}
+  .live-dot{width:8px;height:8px;border-radius:50%;background:var(--green);display:inline-block;margin-right:6px;animation:pulse 1.5s infinite;}
+  @keyframes pulse{0%{opacity:1;}50%{opacity:.3;}100%{opacity:1;}}
+  .row-actions button{background:none;border:none;color:var(--teal);cursor:pointer;font-size:.78rem;font-weight:700;}
+  .empty{text-align:center;padding:40px;color:var(--muted);}
+  select{width:100%;padding:9px 10px;border:1px solid var(--border);border-radius:8px;font-size:.9rem;background:#fbfcfd;}
+  @media(max-width:600px){header h1{font-size:1rem;} .grid{grid-template-columns:1fr 1fr;}}
+
+  /* LOGIN SCREEN */
+  #loginScreen{position:fixed;inset:0;background:linear-gradient(135deg,var(--navy),#1a4d7a);display:flex;align-items:center;justify-content:center;z-index:100;padding:16px;}
+  .login-card{background:#fff;border-radius:16px;padding:32px 28px;max-width:360px;width:100%;box-shadow:0 10px 40px rgba(0,0,0,.25);}
+  .login-card h2{margin:0 0 4px 0;color:var(--navy);font-size:1.3rem;}
+  .login-card p.hint{color:var(--muted);font-size:.82rem;margin:0 0 20px 0;}
+  .login-card label{margin-top:4px;}
+  .login-card input{margin-bottom:14px;font-size:1rem;padding:11px 12px;}
+  .login-card button{width:100%;padding:12px;background:var(--teal);color:#fff;border:none;border-radius:8px;font-weight:700;font-size:.95rem;cursor:pointer;}
+  .login-error{color:var(--red);font-size:.82rem;margin:-6px 0 12px 0;min-height:16px;}
+  #appWrap{display:none;}
+  .logout-btn{background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.35);padding:8px 12px;border-radius:8px;cursor:pointer;font-size:.8rem;font-weight:600;}
+
+  .row-actions{display:flex;gap:10px;}
+  .row-actions button.danger{color:var(--red);}
+
+  /* MODAL */
+  .modal-overlay{position:fixed;inset:0;background:rgba(15,48,87,.55);display:none;align-items:center;justify-content:center;z-index:200;padding:16px;}
+  .modal-overlay.open{display:flex;}
+  .modal-card{background:#fff;border-radius:14px;padding:24px;max-width:420px;width:100%;box-shadow:0 10px 40px rgba(0,0,0,.3);}
+  .modal-card h3{margin:0 0 8px 0;color:var(--navy);font-size:1.1rem;}
+  .modal-card p{color:var(--muted);font-size:.88rem;margin:0 0 16px 0;line-height:1.5;}
+  .modal-card p strong{color:var(--text);}
+  .modal-confirm-row{display:flex;align-items:flex-start;gap:8px;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:12px;margin-bottom:16px;}
+  .modal-confirm-row input[type=checkbox]{margin-top:2px;width:16px;height:16px;flex-shrink:0;}
+  .modal-confirm-row label{margin:0;color:var(--red);font-size:.82rem;font-weight:600;cursor:pointer;}
+  .modal-typed-row{margin-bottom:16px;}
+  .modal-typed-row input{width:100%;padding:9px 10px;border:1px solid var(--border);border-radius:8px;font-size:.9rem;}
+  .modal-actions{display:flex;gap:10px;justify-content:flex-end;}
+  button.danger-btn{background:var(--red);color:#fff;border:none;padding:10px 18px;border-radius:8px;font-weight:700;font-size:.88rem;cursor:pointer;}
+  button.cancel-btn{background:#fff;color:var(--muted);border:1px solid var(--border);padding:10px 18px;border-radius:8px;font-weight:600;font-size:.88rem;cursor:pointer;}
+
+  /* PROJECTION */
+  .projection-card{background:linear-gradient(135deg,#0f3057,#124a7a);color:#fff;}
+  .projection-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px;margin-top:10px;}
+  .projection-grid .item{background:rgba(255,255,255,.1);border-radius:10px;padding:12px 14px;}
+  .projection-grid .item .lbl{font-size:.72rem;opacity:.85;}
+  .projection-grid .item .amt{font-size:1.25rem;font-weight:800;margin-top:4px;}
+  .projection-note{font-size:.72rem;opacity:.75;margin-top:10px;}
+  .chart-wrap{position:relative;height:320px;margin-top:6px;}
+  .danger-zone{border:1px solid #fecaca;background:#fef2f2;border-radius:12px;padding:18px;}
+  .danger-zone .section-title{color:var(--red);border-color:#fecaca;}
+
+  /* TRENDS FILTER BAR */
+  .filter-bar{display:flex;flex-wrap:wrap;align-items:flex-end;gap:12px;}
+  .filter-mode-toggle{display:flex;gap:8px;margin-bottom:4px;}
+  .filter-mode-toggle button{background:#fff;color:var(--navy);border:2px solid var(--border);padding:7px 14px;border-radius:8px;font-weight:600;font-size:.82rem;cursor:pointer;}
+  .filter-mode-toggle button.active{border-color:var(--teal);background:#f0f9f9;color:var(--teal);}
+  .filter-field{min-width:150px;}
+  .filter-field label{display:block;font-size:.72rem;color:var(--muted);font-weight:600;margin-bottom:4px;}
+  .filter-field input, .filter-field select{padding:9px 10px;border:1px solid var(--border);border-radius:8px;font-size:.88rem;width:100%;}
+  .export-pdf-btn{background:var(--navy);color:#fff;border:none;padding:10px 18px;border-radius:8px;font-weight:700;font-size:.88rem;cursor:pointer;white-space:nowrap;}
+</style>
+</head>
+<body>
+
+<!-- LOGIN SCREEN -->
+<div id="loginScreen">
+  <div class="login-card">
+    <h2>MJC Daily Report</h2>
+    <p class="hint">Enter your passcode to continue</p>
+    <label>Passcode</label>
+    <input type="password" id="loginPasscode" placeholder="Enter passcode" autocomplete="off" />
+    <div class="login-error" id="loginError"></div>
+    <button id="loginBtn">Log In</button>
+  </div>
+</div>
+
+<div id="appWrap">
+<header>
+  <div>
+    <h1>MJC Daily Report</h1>
+    <div class="sub" id="headerSub">Staff Entry</div>
+  </div>
+  <nav>
+    <button id="navStaff" class="active">Staff Entry</button>
+    <button id="navAdmin" style="display:none;">Admin Dashboard</button>
+    <button id="navTrends" style="display:none;">Trends</button>
+    <button id="logoutBtn" class="logout-btn">Log Out</button>
+  </nav>
+</header>
+
+<main>
+  <!-- STAFF VIEW -->
+  <div id="staffView">
+
+    <div class="card">
+      <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(220px,1fr));">
+        <div class="field">
+          <label>Report Date</label>
+          <input type="date" id="report_date" />
+        </div>
+        <div class="field">
+          <label>Staff Name (optional)</label>
+          <input type="text" id="staff_name" placeholder="Your name" />
+        </div>
+      </div>
+    </div>
+
+    <!-- DIAGNOSTICS -->
+    <div class="card">
+      <div class="section-title"><span class="dot diag"></span> Diagnostics</div>
+      <div class="grid">
+        <div class="field"><label>Total Patients</label><input type="number" id="diag_total_patients" value="0"></div>
+        <div class="field"><label>Lab</label><input type="number" id="diag_lab" value="0"></div>
+        <div class="field"><label>ECG</label><input type="number" id="diag_ecg" value="0"></div>
+        <div class="field"><label>X-Ray</label><input type="number" id="diag_xray" value="0"></div>
+        <div class="field"><label>CBCT</label><input type="number" id="diag_cbct" value="0"></div>
+        <div class="field"><label>OPG</label><input type="number" id="diag_opg" value="0"></div>
+        <div class="field"><label>USG</label><input type="number" id="diag_usg" value="0"></div>
+        <div class="field"><label>FNAC</label><input type="number" id="diag_fnac" value="0"></div>
+        <div class="field"><label>Biothesiometry</label><input type="number" id="diag_biothesiometry" value="0"></div>
+        <div class="field"><label>Collection (₹)</label><input type="number" id="diag_collection" value="0"></div>
+        <div class="field"><label>Today Pending (₹)</label><input type="number" id="diag_today_pending" value="0"></div>
+        <div class="field"><label>Previous Pending Collected (₹)</label><input type="number" id="diag_previous_pending_collected" value="0"></div>
+        <div class="field"><label>Mercy Hospital Total</label><input type="number" id="diag_mercy_hospital_total" value="0"></div>
+        <div class="field"><label>Govt. Taluk Hospital</label><input type="number" id="diag_govt_taluk_hospital" value="0"></div>
+        <div class="field"><label>Google Review</label><input type="number" id="diag_google_review" value="0"></div>
+        <div class="field"><label>Home Collection</label><input type="number" id="diag_home_collection" value="0"></div>
+        <div class="field"><label>Tomorrow Home Collection Booked</label><input type="number" id="diag_tomorrow_home_collection_booked" value="0"></div>
+      </div>
+    </div>
+
+    <!-- OPTICALS -->
+    <div class="card">
+      <div class="section-title"><span class="dot opt"></span> Opticals / Eye Care</div>
+      <div class="grid">
+        <div class="field"><label>Dr Consultation - Count</label><input type="number" id="opt_dr_consultation_count" value="0"></div>
+        <div class="field"><label>Dr Consultation - Amount (₹)</label><input type="number" id="opt_dr_consultation_amount" value="0"></div>
+        <div class="field"><label>Refraction / Out</label><input type="number" id="opt_refraction_out" value="0"></div>
+        <div class="field"><label>Camp</label><input type="number" id="opt_camp" value="0"></div>
+        <div class="field"><label>No. of Customers</label><input type="number" id="opt_no_of_customers" value="0"></div>
+        <div class="field"><label>Order Value (₹)</label><input type="number" id="opt_order_value" value="0"></div>
+        <div class="field"><label>Order Advance (₹)</label><input type="number" id="opt_order_advance" value="0"></div>
+        <div class="field"><label>Sale (₹)</label><input type="number" id="opt_sale" value="0"></div>
+        <div class="field"><label>Pharmacy (₹)</label><input type="number" id="opt_pharmacy" value="0"></div>
+        <div class="field"><label>Google Review</label><input type="number" id="opt_google_review" value="0"></div>
+        <div class="field"><label>Cutique Service</label><input type="number" id="opt_cutique_service" value="0"></div>
+        <div class="field"><label>Sale from Cutique (₹)</label><input type="number" id="opt_sale_from_cutique" value="0"></div>
+        <div class="field"><label>Walkins</label><input type="number" id="opt_walkins" value="0"></div>
+      </div>
+      <div class="calc-row"><span>Opticals Collection (auto)</span><span class="val" id="opt_collection_display">₹0</span></div>
+    </div>
+
+    <!-- CUTIQUE -->
+    <div class="card">
+      <div class="section-title"><span class="dot cut"></span> Cutique</div>
+      <div class="grid">
+        <div class="field"><label>No. of Patients</label><input type="number" id="cut_no_of_patients" value="0"></div>
+        <div class="field"><label>No. of Procedures</label><input type="number" id="cut_no_of_procedures" value="0"></div>
+        <div class="field"><label>AI Face</label><input type="number" id="cut_ai_face" value="0"></div>
+        <div class="field"><label>Google Review</label><input type="number" id="cut_google_review" value="0"></div>
+        <div class="field"><label>Cash (₹)</label><input type="number" id="cut_cash" value="0"></div>
+        <div class="field"><label>Card (₹)</label><input type="number" id="cut_card" value="0"></div>
+        <div class="field"><label>GPay (₹)</label><input type="number" id="cut_gpay" value="0"></div>
+        <div class="field"><label>Pharmacy Collection - Count</label><input type="number" id="cut_pharmacy_collection_count" value="0"></div>
+        <div class="field"><label>Pharmacy Collection - Amount (₹)</label><input type="number" id="cut_pharmacy_collection_amount" value="0"></div>
+        <div class="field"><label>Medicine Not Purchased By</label><input type="number" id="cut_medicine_not_purchased_by" value="0"></div>
+      </div>
+      <div class="calc-row"><span>Cutique Collection (Cash+Card+GPay)</span><span class="val" id="cut_collection_display">₹0</span></div>
+      <div class="calc-row"><span>Cutique Total Collection (incl. Pharmacy)</span><span class="val" id="cut_total_collection_display">₹0</span></div>
+    </div>
+
+    <!-- TOTALS -->
+    <div class="card totals-card">
+      <div class="section-title" style="color:#fff;border-color:rgba(255,255,255,.3);">Auto-Calculated Totals</div>
+      <div class="totals-grid">
+        <div class="item"><div class="lbl">Diagnostics Collection</div><div class="amt" id="t_diag">₹0</div></div>
+        <div class="item"><div class="lbl">Opticals Collection</div><div class="amt" id="t_opt">₹0</div></div>
+        <div class="item"><div class="lbl">Cutique Collection</div><div class="amt" id="t_cut">₹0</div></div>
+        <div class="item"><div class="lbl">Total Collection</div><div class="amt" id="t_total_collection">₹0</div></div>
+        <div class="item"><div class="lbl">Total Business</div><div class="amt" id="t_total_business">₹0</div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="actions">
+        <button class="primary" id="saveBtn">💾 Save Report</button>
+        <button class="secondary" id="pdfBtn">📄 Export as PDF</button>
+        <button class="secondary" id="whatsappBtn" style="border-color:#25D366;color:#128C4A;">🟢 Export to WhatsApp</button>
+        <button class="secondary" id="loadBtn">🔄 Load Existing Date</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ADMIN VIEW -->
+  <div id="adminView" style="display:none;">
+    <div class="card">
+      <div class="section-title" style="border:none;margin:0;">
+        <span class="live-dot"></span> Live — updates automatically when staff save
+      </div>
+    </div>
+
+    <div class="stat-grid">
+      <div class="stat"><div class="lbl">Reports Logged</div><div class="val" id="s_count">0</div></div>
+      <div class="stat"><div class="lbl">Total Collection (all)</div><div class="val" id="s_collection">₹0</div></div>
+      <div class="stat"><div class="lbl">Total Business (all)</div><div class="val" id="s_business">₹0</div></div>
+      <div class="stat"><div class="lbl">Avg / Day</div><div class="val" id="s_avg">₹0</div></div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">Daily Reports</div>
+      <div class="table-wrap">
+        <table id="adminTable">
+          <thead>
+            <tr>
+              <th>Date</th><th>Staff</th>
+              <th>Diag Pts</th><th>Diag Coll</th>
+              <th>Opt Coll</th>
+              <th>Cut Coll</th><th>Cut Total</th>
+              <th>Total Collection</th><th>Total Business</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="adminTbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="danger-zone">
+      <div class="section-title">⚠️ Danger Zone</div>
+      <p style="font-size:.85rem;color:var(--muted);margin:0 0 12px 0;">Permanently delete all daily report entries. This cannot be undone.</p>
+      <button class="danger-btn" id="deleteAllBtn">Delete All Data</button>
+    </div>
+  </div>
+
+  <!-- TRENDS VIEW -->
+  <div id="trendsView" style="display:none;">
+    <div class="card">
+      <div class="section-title">Filter & Export</div>
+      <div class="filter-mode-toggle">
+        <button id="filterModeAll" class="active">All Data</button>
+        <button id="filterModeMonth">Month-wise</button>
+        <button id="filterModeRange">Date Range</button>
+      </div>
+      <div class="filter-bar">
+        <div class="filter-field" id="filterMonthField" style="display:none;">
+          <label>Select Month</label>
+          <input type="month" id="filterMonth" />
+        </div>
+        <div class="filter-field" id="filterFromField" style="display:none;">
+          <label>From Date</label>
+          <input type="date" id="filterFrom" />
+        </div>
+        <div class="filter-field" id="filterToField" style="display:none;">
+          <label>To Date</label>
+          <input type="date" id="filterTo" />
+        </div>
+        <button class="export-pdf-btn" id="trendsPdfBtn">📄 Export Trends as PDF</button>
+      </div>
+    </div>
+
+    <div class="card projection-card">
+      <div class="section-title" style="color:#fff;border-color:rgba(255,255,255,.3);">📈 This Month's Projection</div>
+      <div class="projection-grid">
+        <div class="item"><div class="lbl">Collected So Far</div><div class="amt" id="p_so_far">₹0</div></div>
+        <div class="item"><div class="lbl">Avg Daily Collection</div><div class="amt" id="p_avg">₹0</div></div>
+        <div class="item"><div class="lbl">Days Remaining</div><div class="amt" id="p_days_left">0</div></div>
+        <div class="item"><div class="lbl">Projected Month-End Total</div><div class="amt" id="p_projection">₹0</div></div>
+      </div>
+      <div class="projection-note" id="p_note">Based on average daily collection so far this month.</div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">Department-Wise Collection Trend</div>
+      <div class="chart-wrap"><canvas id="trendChart"></canvas></div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">Daily Breakdown</div>
+      <div class="table-wrap">
+        <table id="trendTable">
+          <thead>
+            <tr>
+              <th>Date</th><th>Diagnostics</th><th>Opticals</th><th>Cutique</th><th>Total</th>
+            </tr>
+          </thead>
+          <tbody id="trendTbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</main>
+</div>
+
+<!-- DELETE ROW MODAL -->
+<div class="modal-overlay" id="deleteRowModal">
+  <div class="modal-card">
+    <h3>Delete this entry?</h3>
+    <p>You're about to permanently delete the report for <strong id="deleteRowDate"></strong>. This cannot be undone.</p>
+    <div class="modal-confirm-row">
+      <input type="checkbox" id="deleteRowConfirmCheck" />
+      <label for="deleteRowConfirmCheck">Yes, I want to permanently delete this entry</label>
+    </div>
+    <div class="modal-actions">
+      <button class="cancel-btn" id="deleteRowCancelBtn">Cancel</button>
+      <button class="danger-btn" id="deleteRowConfirmBtn" disabled>Delete Entry</button>
+    </div>
+  </div>
+</div>
+
+<!-- DELETE ALL MODAL -->
+<div class="modal-overlay" id="deleteAllModal">
+  <div class="modal-card">
+    <h3>Delete ALL report data?</h3>
+    <p>This will permanently delete <strong id="deleteAllCount">0</strong> report(s) — every day's data, for every department. This cannot be undone.</p>
+    <div class="modal-confirm-row">
+      <input type="checkbox" id="deleteAllConfirmCheck" />
+      <label for="deleteAllConfirmCheck">Yes, I understand this permanently deletes all data</label>
+    </div>
+    <div class="modal-typed-row">
+      <label style="display:block;font-size:.78rem;color:var(--muted);font-weight:600;margin-bottom:4px;">Type DELETE to confirm</label>
+      <input type="text" id="deleteAllTypedConfirm" placeholder="DELETE" autocomplete="off" />
+    </div>
+    <div class="modal-actions">
+      <button class="cancel-btn" id="deleteAllCancelBtn">Cancel</button>
+      <button class="danger-btn" id="deleteAllConfirmBtn" disabled>Delete All Data</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const SUPABASE_URL = "https://ikrvqhuwhwahnyiozxci.supabase.co";
+const SUPABASE_KEY = "sb_publishable_MoyIWYtGWE6bYn7Gq_XHjg_4WRJj95Z";
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const TABLE = "mjc_daily_reports";
+
+// AUTH
+const STAFF_CODE = "MJC@2026";
+const ADMIN_CODE = "ADMIN@2026";
+
+function applyRole(role){
+  sessionStorage.setItem('mjc_role', role);
+  document.getElementById('loginScreen').style.display = 'none';
+  document.getElementById('appWrap').style.display = 'block';
+  document.getElementById('navAdmin').style.display = (role === 'admin') ? 'inline-block' : 'none';
+  document.getElementById('navTrends').style.display = (role === 'admin') ? 'inline-block' : 'none';
+}
+
+function tryLogin(){
+  const val = document.getElementById('loginPasscode').value.trim();
+  const errEl = document.getElementById('loginError');
+  if(val === ADMIN_CODE){ errEl.textContent=''; applyRole('admin'); return; }
+  if(val === STAFF_CODE){ errEl.textContent=''; applyRole('staff'); return; }
+  errEl.textContent = 'Incorrect passcode. Please try again.';
+}
+
+document.getElementById('loginBtn').addEventListener('click', tryLogin);
+document.getElementById('loginPasscode').addEventListener('keydown', (e)=>{ if(e.key === 'Enter') tryLogin(); });
+
+document.getElementById('logoutBtn').addEventListener('click', ()=>{
+  sessionStorage.removeItem('mjc_role');
+  document.getElementById('loginPasscode').value = '';
+  document.getElementById('appWrap').style.display = 'none';
+  document.getElementById('loginScreen').style.display = 'flex';
+  document.getElementById('navStaff').click();
+});
+
+// restore session if already logged in this tab
+const existingRole = sessionStorage.getItem('mjc_role');
+if(existingRole === 'admin' || existingRole === 'staff'){
+  applyRole(existingRole);
+} else {
+  document.getElementById('loginPasscode').focus();
+}
+
+const fields = [
+  "diag_total_patients","diag_lab","diag_ecg","diag_xray","diag_cbct","diag_opg","diag_usg","diag_fnac","diag_biothesiometry",
+  "diag_collection","diag_today_pending","diag_previous_pending_collected","diag_mercy_hospital_total","diag_govt_taluk_hospital",
+  "diag_google_review","diag_home_collection","diag_tomorrow_home_collection_booked",
+  "opt_dr_consultation_count","opt_dr_consultation_amount","opt_refraction_out","opt_camp","opt_no_of_customers",
+  "opt_order_value","opt_order_advance","opt_sale","opt_pharmacy","opt_google_review","opt_cutique_service","opt_sale_from_cutique","opt_walkins",
+  "cut_no_of_patients","cut_no_of_procedures","cut_ai_face","cut_google_review","cut_cash","cut_card","cut_gpay",
+  "cut_pharmacy_collection_count","cut_pharmacy_collection_amount","cut_medicine_not_purchased_by"
+];
+
+function toast(msg, type){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = type || '';
+  t.style.display = 'block';
+  setTimeout(()=>{ t.style.display='none'; }, 3200);
+}
+function money(n){ return '₹' + Number(n||0).toLocaleString('en-IN'); }
+function num(id){ return Number(document.getElementById(id).value || 0); }
+
+function recalc(){
+  const optColl = num('opt_dr_consultation_amount') + num('opt_order_advance') + num('opt_sale') + num('opt_pharmacy');
+  const cutColl = num('cut_cash') + num('cut_card') + num('cut_gpay');
+  const cutTotalColl = cutColl + num('cut_pharmacy_collection_amount');
+  const totalCollection = num('diag_collection') + optColl + cutTotalColl;
+  const totalBusiness = num('diag_collection') + num('opt_dr_consultation_amount') + num('opt_order_value') + num('opt_sale') + num('opt_pharmacy') + cutTotalColl;
+
+  document.getElementById('opt_collection_display').textContent = money(optColl);
+  document.getElementById('cut_collection_display').textContent = money(cutColl);
+  document.getElementById('cut_total_collection_display').textContent = money(cutTotalColl);
+  document.getElementById('t_diag').textContent = money(num('diag_collection'));
+  document.getElementById('t_opt').textContent = money(optColl);
+  document.getElementById('t_cut').textContent = money(cutTotalColl);
+  document.getElementById('t_total_collection').textContent = money(totalCollection);
+  document.getElementById('t_total_business').textContent = money(totalBusiness);
+}
+
+fields.forEach(f=>{
+  const el = document.getElementById(f);
+  if(el) el.addEventListener('input', recalc);
+});
+
+// default date = today
+document.getElementById('report_date').value = new Date().toISOString().slice(0,10);
+recalc();
+
+// SAVE
+document.getElementById('saveBtn').addEventListener('click', async ()=>{
+  const report_date = document.getElementById('report_date').value;
+  if(!report_date){ toast('Please select a date', 'error'); return; }
+  const payload = { report_date, staff_name: document.getElementById('staff_name').value || null };
+  fields.forEach(f=>{ payload[f] = num(f); });
+
+  const btn = document.getElementById('saveBtn');
+  btn.disabled = true; btn.textContent = 'Saving...';
+  const { error } = await sb.from(TABLE).upsert(payload, { onConflict: 'report_date' });
+  btn.disabled = false; btn.textContent = '💾 Save Report';
+
+  if(error){ toast('Save failed: ' + error.message, 'error'); }
+  else{ toast('Saved for ' + report_date, 'success'); }
+});
+
+// LOAD EXISTING
+document.getElementById('loadBtn').addEventListener('click', async ()=>{
+  const report_date = document.getElementById('report_date').value;
+  if(!report_date){ toast('Pick a date first', 'error'); return; }
+  const { data, error } = await sb.from(TABLE).select('*').eq('report_date', report_date).maybeSingle();
+  if(error){ toast('Load failed: ' + error.message, 'error'); return; }
+  if(!data){ toast('No report found for ' + report_date, 'error'); return; }
+  document.getElementById('staff_name').value = data.staff_name || '';
+  fields.forEach(f=>{ if(document.getElementById(f)) document.getElementById(f).value = data[f] ?? 0; });
+  recalc();
+  toast('Loaded ' + report_date, 'success');
+});
+
+// PDF EXPORT
+document.getElementById('pdfBtn').addEventListener('click', ()=>{
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+  const date = document.getElementById('report_date').value;
+  const staff = document.getElementById('staff_name').value;
+  let y = 15;
+
+  doc.setFontSize(16); doc.setFont(undefined,'bold');
+  doc.text('MJC Daily Report', 14, y); y+=7;
+  doc.setFontSize(10); doc.setFont(undefined,'normal');
+  doc.text('Date: ' + date + (staff ? '   |   Staff: ' + staff : ''), 14, y); y+=10;
+
+  function section(title, rows){
+    doc.setFontSize(12); doc.setFont(undefined,'bold');
+    doc.setTextColor(15,48,87);
+    doc.text(title, 14, y); y+=6;
+    doc.setDrawColor(200); doc.line(14,y-3,196,y-3);
+    doc.setFontSize(9.5); doc.setFont(undefined,'normal'); doc.setTextColor(30,30,30);
+    rows.forEach(([label,val])=>{
+      if(y > 280){ doc.addPage(); y = 15; }
+      doc.text(label, 16, y);
+      doc.text(String(val), 190, y, { align:'right' });
+      y += 5.5;
+    });
+    y += 5;
+  }
+
+  const optColl = num('opt_dr_consultation_amount') + num('opt_order_advance') + num('opt_sale') + num('opt_pharmacy');
+  const cutColl = num('cut_cash') + num('cut_card') + num('cut_gpay');
+  const cutTotalColl = cutColl + num('cut_pharmacy_collection_amount');
+  const totalCollection = num('diag_collection') + optColl + cutTotalColl;
+  const totalBusiness = num('diag_collection') + num('opt_dr_consultation_amount') + num('opt_order_value') + num('opt_sale') + num('opt_pharmacy') + cutTotalColl;
+
+  section('Diagnostics', [
+    ['Total Patients', num('diag_total_patients')],
+    ['Lab', num('diag_lab')], ['ECG', num('diag_ecg')], ['X-Ray', num('diag_xray')],
+    ['CBCT', num('diag_cbct')], ['OPG', num('diag_opg')], ['USG', num('diag_usg')],
+    ['FNAC', num('diag_fnac')], ['Biothesiometry', num('diag_biothesiometry')],
+    ['Collection', money(num('diag_collection'))],
+    ['Today Pending', money(num('diag_today_pending'))],
+    ['Previous Pending Collected', money(num('diag_previous_pending_collected'))],
+    ['Mercy Hospital Total', num('diag_mercy_hospital_total')],
+    ['Govt. Taluk Hospital', num('diag_govt_taluk_hospital')],
+    ['Google Review', num('diag_google_review')],
+    ['Home Collection', num('diag_home_collection')],
+    ['Tomorrow Home Collection Booked', num('diag_tomorrow_home_collection_booked')],
+  ]);
+
+  section('Opticals / Eye Care', [
+    ['Dr Consultation (count / amount)', num('opt_dr_consultation_count') + ' / ' + money(num('opt_dr_consultation_amount'))],
+    ['Refraction/Out', num('opt_refraction_out')], ['Camp', num('opt_camp')],
+    ['No. of Customers', num('opt_no_of_customers')],
+    ['Order Value', money(num('opt_order_value'))], ['Order Advance', money(num('opt_order_advance'))],
+    ['Sale', money(num('opt_sale'))], ['Pharmacy', money(num('opt_pharmacy'))],
+    ['Google Review', num('opt_google_review')], ['Cutique Service', num('opt_cutique_service')],
+    ['Sale from Cutique', money(num('opt_sale_from_cutique'))], ['Walkins', num('opt_walkins')],
+    ['Opticals Collection (auto)', money(optColl)],
+  ]);
+
+  section('Cutique', [
+    ['No. of Patients', num('cut_no_of_patients')], ['No. of Procedures', num('cut_no_of_procedures')],
+    ['AI Face', num('cut_ai_face')], ['Google Review', num('cut_google_review')],
+    ['Cash', money(num('cut_cash'))], ['Card', money(num('cut_card'))], ['GPay', money(num('cut_gpay'))],
+    ['Cutique Collection (auto)', money(cutColl)],
+    ['Pharmacy Collection (count / amount)', num('cut_pharmacy_collection_count') + ' / ' + money(num('cut_pharmacy_collection_amount'))],
+    ['Medicine Not Purchased By', num('cut_medicine_not_purchased_by')],
+    ['Cutique Total Collection (auto)', money(cutTotalColl)],
+  ]);
+
+  section('Grand Totals', [
+    ['Total Collection', money(totalCollection)],
+    ['Total Business', money(totalBusiness)],
+  ]);
+
+  doc.save('MJC_Daily_Report_' + date + '.pdf');
+});
+
+// WHATSAPP EXPORT
+document.getElementById('whatsappBtn').addEventListener('click', ()=>{
+  const date = document.getElementById('report_date').value;
+  const dateObj = date ? new Date(date + 'T00:00:00') : new Date();
+  const dd = String(dateObj.getDate()).padStart(2,'0');
+  const mm = String(dateObj.getMonth()+1).padStart(2,'0');
+  const yyyy = dateObj.getFullYear();
+  const formattedDate = `${dd}.${mm}.${yyyy}`;
+
+  const optColl = num('opt_dr_consultation_amount') + num('opt_order_advance') + num('opt_sale') + num('opt_pharmacy');
+  const cutColl = num('cut_cash') + num('cut_card') + num('cut_gpay');
+  const cutTotalColl = cutColl + num('cut_pharmacy_collection_amount');
+  const totalCollection = num('diag_collection') + optColl + cutTotalColl;
+  const totalBusiness = num('diag_collection') + num('opt_dr_consultation_amount') + num('opt_order_value') + num('opt_sale') + num('opt_pharmacy') + cutTotalColl;
+
+  const lines = [];
+  lines.push(`*${formattedDate}*`);
+  lines.push(`*Diagnostics*`);
+  lines.push(`Total Patient : ${num('diag_total_patients')}`);
+  lines.push(`Lab - ${num('diag_lab')}`);
+  lines.push(`Ecg - ${num('diag_ecg')}`);
+  lines.push(`X-Ray - ${num('diag_xray')}`);
+  lines.push(`Cbct - ${num('diag_cbct')}`);
+  lines.push(`Opg- ${num('diag_opg')}`);
+  lines.push(`Usg- ${num('diag_usg')}`);
+  lines.push(`FNAC- ${num('diag_fnac')}`);
+  lines.push(`Biothesiometry- ${num('diag_biothesiometry')}`);
+  lines.push(`Collection = ${money(num('diag_collection'))}`);
+  lines.push(`Today pending= ${money(num('diag_today_pending'))}`);
+  lines.push(`Previous pending Collected - ${money(num('diag_previous_pending_collected'))}`);
+  lines.push(`Mercy Hospital Total - ${num('diag_mercy_hospital_total')}`);
+  lines.push(`Govt. Taluk hospital -${num('diag_govt_taluk_hospital')}`);
+  lines.push(`Google Review - ${num('diag_google_review')}`);
+  lines.push(`Home collection - ${num('diag_home_collection')}`);
+  lines.push(`Tomorrow Home Collection Booked -${num('diag_tomorrow_home_collection_booked')}`);
+  lines.push(``);
+  lines.push(`*Opticals / Eye Care*`);
+  lines.push(`Dr consultation :  ${num('opt_dr_consultation_count')}(${money(num('opt_dr_consultation_amount'))})`);
+  lines.push(`Refraction/Out  : ${num('opt_refraction_out')}`);
+  lines.push(`Camp.               : ${num('opt_camp')}`);
+  lines.push(`No. Of Cust        : ${num('opt_no_of_customers')}`);
+  lines.push(`Order Value        : ${money(num('opt_order_value'))}`);
+  lines.push(`Order adv           : ${money(num('opt_order_advance'))}`);
+  lines.push(`Sale                     : ${money(num('opt_sale'))}`);
+  lines.push(`Pharmacy.          : ${money(num('opt_pharmacy'))}`);
+  lines.push(`Collection           : ${money(optColl)}`);
+  lines.push(`Google review.   :  ${num('opt_google_review')}`);
+  lines.push(`Cutique service   : ${num('opt_cutique_service')}`);
+  lines.push(`Sale from Cutique : ${money(num('opt_sale_from_cutique'))}`);
+  lines.push(`Walkins                : ${num('opt_walkins')}`);
+  lines.push(``);
+  lines.push(`*Cutique*`);
+  lines.push(`No of patients = ${num('cut_no_of_patients')}`);
+  lines.push(`No of procedures = ${num('cut_no_of_procedures')}`);
+  lines.push(`Ai face = ${num('cut_ai_face')}`);
+  lines.push(`google review= ${num('cut_google_review')}`);
+  lines.push(`Cash = ${money(num('cut_cash'))}`);
+  lines.push(`Card = ${money(num('cut_card'))}`);
+  lines.push(`Gpay = ${money(num('cut_gpay'))}`);
+  lines.push(`Collection = ${money(cutColl)}`);
+  lines.push(`Pharmacy collection : ${num('cut_pharmacy_collection_count')}/ ${money(num('cut_pharmacy_collection_amount'))}`);
+  lines.push(`Medicine not purchased by: ${num('cut_medicine_not_purchased_by')}`);
+  lines.push(`Total collection= ${money(cutTotalColl)}`);
+  lines.push(`*Total Collection : ${money(totalCollection)}*`);
+  lines.push(`*Total Business : ${money(totalBusiness)}*`);
+
+  const staffName = document.getElementById('staff_name').value;
+  if(staffName){ lines.push(``); lines.push(`_Submitted by: ${staffName}_`); }
+
+  const text = encodeURIComponent(lines.join('\n'));
+  window.open(`https://wa.me/?text=${text}`, '_blank');
+});
+
+// NAV
+function setActiveNav(activeId){
+  ['navStaff','navAdmin','navTrends'].forEach(id=>{
+    document.getElementById(id).classList.toggle('active', id === activeId);
+  });
+}
+function hideAllViews(){
+  document.getElementById('staffView').style.display='none';
+  document.getElementById('adminView').style.display='none';
+  document.getElementById('trendsView').style.display='none';
+}
+document.getElementById('navStaff').addEventListener('click', ()=>{
+  hideAllViews();
+  document.getElementById('staffView').style.display='block';
+  setActiveNav('navStaff');
+  document.getElementById('headerSub').textContent = 'Staff Entry';
+});
+document.getElementById('navAdmin').addEventListener('click', ()=>{
+  if(sessionStorage.getItem('mjc_role') !== 'admin'){ toast('Admin access only', 'error'); return; }
+  hideAllViews();
+  document.getElementById('adminView').style.display='block';
+  setActiveNav('navAdmin');
+  document.getElementById('headerSub').textContent = 'Admin Dashboard';
+  loadAdminData();
+});
+document.getElementById('navTrends').addEventListener('click', ()=>{
+  if(sessionStorage.getItem('mjc_role') !== 'admin'){ toast('Admin access only', 'error'); return; }
+  hideAllViews();
+  document.getElementById('trendsView').style.display='block';
+  setActiveNav('navTrends');
+  document.getElementById('headerSub').textContent = 'Trends';
+  loadTrendsData();
+});
+
+// ADMIN DATA + REALTIME
+async function loadAdminData(){
+  const { data, error } = await sb.from(TABLE).select('*').order('report_date', { ascending:false });
+  if(error){ toast('Load failed: ' + error.message, 'error'); return; }
+  renderAdmin(data || []);
+}
+
+function renderAdmin(rows){
+  const tbody = document.getElementById('adminTbody');
+  if(!rows.length){
+    tbody.innerHTML = '<tr><td colspan="10" class="empty">No reports yet</td></tr>';
+  } else {
+    tbody.innerHTML = rows.map(r=>`
+      <tr>
+        <td style="text-align:left">${r.report_date}</td>
+        <td style="text-align:left">${r.staff_name || '-'}</td>
+        <td>${r.diag_total_patients}</td>
+        <td>${money(r.diag_collection)}</td>
+        <td>${money(r.opt_collection)}</td>
+        <td>${money(r.cut_collection)}</td>
+        <td>${money(r.cut_total_collection)}</td>
+        <td><strong>${money(r.total_collection)}</strong></td>
+        <td><strong>${money(r.total_business)}</strong></td>
+        <td class="row-actions">
+          <button onclick="editRow('${r.report_date}')">Edit</button>
+          <button class="danger" onclick="openDeleteRowModal('${r.report_date}')">Delete</button>
+        </td>
+      </tr>
+    `).join('');
+  }
+  const count = rows.length;
+  const totalCollection = rows.reduce((s,r)=>s+Number(r.total_collection||0),0);
+  const totalBusiness = rows.reduce((s,r)=>s+Number(r.total_business||0),0);
+  document.getElementById('s_count').textContent = count;
+  document.getElementById('s_collection').textContent = money(totalCollection);
+  document.getElementById('s_business').textContent = money(totalBusiness);
+  document.getElementById('s_avg').textContent = money(count ? totalCollection/count : 0);
+}
+
+window.editRow = function(date){
+  document.getElementById('navStaff').click();
+  document.getElementById('report_date').value = date;
+  document.getElementById('loadBtn').click();
+};
+
+// DELETE SINGLE ROW
+let pendingDeleteDate = null;
+
+window.openDeleteRowModal = function(date){
+  pendingDeleteDate = date;
+  document.getElementById('deleteRowDate').textContent = date;
+  document.getElementById('deleteRowConfirmCheck').checked = false;
+  document.getElementById('deleteRowConfirmBtn').disabled = true;
+  document.getElementById('deleteRowModal').classList.add('open');
+};
+
+document.getElementById('deleteRowConfirmCheck').addEventListener('change', (e)=>{
+  document.getElementById('deleteRowConfirmBtn').disabled = !e.target.checked;
+});
+document.getElementById('deleteRowCancelBtn').addEventListener('click', ()=>{
+  document.getElementById('deleteRowModal').classList.remove('open');
+  pendingDeleteDate = null;
+});
+document.getElementById('deleteRowConfirmBtn').addEventListener('click', async ()=>{
+  if(!pendingDeleteDate) return;
+  const btn = document.getElementById('deleteRowConfirmBtn');
+  btn.disabled = true; btn.textContent = 'Deleting...';
+  const { error } = await sb.from(TABLE).delete().eq('report_date', pendingDeleteDate);
+  btn.textContent = 'Delete Entry';
+  document.getElementById('deleteRowModal').classList.remove('open');
+  if(error){ toast('Delete failed: ' + error.message, 'error'); }
+  else{ toast('Deleted report for ' + pendingDeleteDate, 'success'); loadAdminData(); }
+  pendingDeleteDate = null;
+});
+
+// DELETE ALL DATA
+document.getElementById('deleteAllBtn').addEventListener('click', async ()=>{
+  const { count } = await sb.from(TABLE).select('*', { count:'exact', head:true });
+  document.getElementById('deleteAllCount').textContent = count ?? 0;
+  document.getElementById('deleteAllConfirmCheck').checked = false;
+  document.getElementById('deleteAllTypedConfirm').value = '';
+  document.getElementById('deleteAllConfirmBtn').disabled = true;
+  document.getElementById('deleteAllModal').classList.add('open');
+});
+
+function refreshDeleteAllBtnState(){
+  const checked = document.getElementById('deleteAllConfirmCheck').checked;
+  const typed = document.getElementById('deleteAllTypedConfirm').value.trim();
+  document.getElementById('deleteAllConfirmBtn').disabled = !(checked && typed === 'DELETE');
+}
+document.getElementById('deleteAllConfirmCheck').addEventListener('change', refreshDeleteAllBtnState);
+document.getElementById('deleteAllTypedConfirm').addEventListener('input', refreshDeleteAllBtnState);
+document.getElementById('deleteAllCancelBtn').addEventListener('click', ()=>{
+  document.getElementById('deleteAllModal').classList.remove('open');
+});
+document.getElementById('deleteAllConfirmBtn').addEventListener('click', async ()=>{
+  const btn = document.getElementById('deleteAllConfirmBtn');
+  btn.disabled = true; btn.textContent = 'Deleting...';
+  const { error } = await sb.from(TABLE).delete().neq('report_date', '1900-01-01');
+  btn.textContent = 'Delete All Data';
+  document.getElementById('deleteAllModal').classList.remove('open');
+  if(error){ toast('Delete failed: ' + error.message, 'error'); }
+  else{ toast('All report data deleted', 'success'); loadAdminData(); }
+});
+
+// TRENDS + PROJECTION
+let trendChartInstance = null;
+let allTrendRows = [];
+let trendFilterMode = 'all'; // 'all' | 'month' | 'range'
+
+async function loadTrendsData(){
+  const { data, error } = await sb.from(TABLE).select('*').order('report_date', { ascending:true });
+  if(error){ toast('Load failed: ' + error.message, 'error'); return; }
+  allTrendRows = data || [];
+  applyTrendFilter();
+}
+
+function getFilteredTrendRows(){
+  if(trendFilterMode === 'month'){
+    const mVal = document.getElementById('filterMonth').value; // "YYYY-MM"
+    if(!mVal) return allTrendRows;
+    return allTrendRows.filter(r => r.report_date.slice(0,7) === mVal);
+  }
+  if(trendFilterMode === 'range'){
+    const from = document.getElementById('filterFrom').value;
+    const to = document.getElementById('filterTo').value;
+    return allTrendRows.filter(r => {
+      if(from && r.report_date < from) return false;
+      if(to && r.report_date > to) return false;
+      return true;
+    });
+  }
+  return allTrendRows;
+}
+
+function applyTrendFilter(){
+  renderTrends(getFilteredTrendRows());
+}
+
+function setTrendFilterMode(mode){
+  trendFilterMode = mode;
+  document.getElementById('filterModeAll').classList.toggle('active', mode === 'all');
+  document.getElementById('filterModeMonth').classList.toggle('active', mode === 'month');
+  document.getElementById('filterModeRange').classList.toggle('active', mode === 'range');
+  document.getElementById('filterMonthField').style.display = mode === 'month' ? 'block' : 'none';
+  document.getElementById('filterFromField').style.display = mode === 'range' ? 'block' : 'none';
+  document.getElementById('filterToField').style.display = mode === 'range' ? 'block' : 'none';
+  applyTrendFilter();
+}
+
+document.getElementById('filterModeAll').addEventListener('click', ()=>setTrendFilterMode('all'));
+document.getElementById('filterModeMonth').addEventListener('click', ()=>setTrendFilterMode('month'));
+document.getElementById('filterModeRange').addEventListener('click', ()=>setTrendFilterMode('range'));
+document.getElementById('filterMonth').addEventListener('change', applyTrendFilter);
+document.getElementById('filterFrom').addEventListener('change', applyTrendFilter);
+document.getElementById('filterTo').addEventListener('change', applyTrendFilter);
+
+// default month filter = current month
+document.getElementById('filterMonth').value = new Date().toISOString().slice(0,7);
+
+function renderTrends(rows){
+  // Chart + table (all data, chronological)
+  const labels = rows.map(r => r.report_date);
+  const diagData = rows.map(r => Number(r.diag_collection || 0));
+  const optData = rows.map(r => Number(r.opt_collection || 0));
+  const cutData = rows.map(r => Number(r.cut_total_collection || 0));
+
+  const ctx = document.getElementById('trendChart').getContext('2d');
+  if(trendChartInstance) trendChartInstance.destroy();
+  trendChartInstance = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        { label:'Diagnostics', data:diagData, borderColor:'#3b82f6', backgroundColor:'#3b82f622', tension:.3 },
+        { label:'Opticals', data:optData, borderColor:'#8b5cf6', backgroundColor:'#8b5cf622', tension:.3 },
+        { label:'Cutique', data:cutData, borderColor:'#ec4899', backgroundColor:'#ec489922', tension:.3 },
+      ]
+    },
+    options: {
+      responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{ position:'top' } },
+      scales:{ y:{ beginAtZero:true, ticks:{ callback:(v)=>'₹'+v.toLocaleString('en-IN') } } }
+    }
+  });
+
+  const tbody = document.getElementById('trendTbody');
+  if(!rows.length){
+    tbody.innerHTML = '<tr><td colspan="5" class="empty">No reports yet</td></tr>';
+  } else {
+    tbody.innerHTML = rows.slice().reverse().map(r => `
+      <tr>
+        <td style="text-align:left">${r.report_date}</td>
+        <td>${money(r.diag_collection)}</td>
+        <td>${money(r.opt_collection)}</td>
+        <td>${money(r.cut_total_collection)}</td>
+        <td><strong>${money(r.total_collection)}</strong></td>
+      </tr>
+    `).join('');
+  }
+
+  // PROJECTION: current month only, average-based
+  const now = new Date();
+  const y = now.getFullYear(), m = now.getMonth();
+  const daysInMonth = new Date(y, m+1, 0).getDate();
+  const todayDate = now.getDate();
+
+  const thisMonthRows = rows.filter(r => {
+    const d = new Date(r.report_date + 'T00:00:00');
+    return d.getFullYear() === y && d.getMonth() === m;
+  });
+
+  const collectedSoFar = thisMonthRows.reduce((s,r)=>s+Number(r.total_collection||0),0);
+  const daysLoggedThisMonth = thisMonthRows.length;
+  const avgDaily = daysLoggedThisMonth ? collectedSoFar / daysLoggedThisMonth : 0;
+  const daysRemaining = Math.max(daysInMonth - todayDate, 0);
+  const projectedTotal = collectedSoFar + (avgDaily * daysRemaining);
+
+  document.getElementById('p_so_far').textContent = money(collectedSoFar);
+  document.getElementById('p_avg').textContent = money(avgDaily);
+  document.getElementById('p_days_left').textContent = daysRemaining;
+  document.getElementById('p_projection').textContent = money(projectedTotal);
+  document.getElementById('p_note').textContent = daysLoggedThisMonth
+    ? `Based on ${daysLoggedThisMonth} day(s) logged this month (avg ₹${Math.round(avgDaily).toLocaleString('en-IN')}/day) × ${daysRemaining} day(s) remaining.`
+    : 'No entries logged yet this month — projection will appear once data is saved.';
+}
+
+// TRENDS PDF EXPORT
+document.getElementById('trendsPdfBtn').addEventListener('click', ()=>{
+  const rows = getFilteredTrendRows();
+  if(!rows.length){ toast('No data to export for this selection', 'error'); return; }
+
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+  let y = 15;
+
+  let rangeLabel = 'All Data';
+  if(trendFilterMode === 'month'){
+    const mVal = document.getElementById('filterMonth').value;
+    if(mVal){
+      const [yy,mm] = mVal.split('-');
+      const monthName = new Date(Number(yy), Number(mm)-1, 1).toLocaleString('en-US', { month:'long', year:'numeric' });
+      rangeLabel = monthName;
+    }
+  } else if(trendFilterMode === 'range'){
+    const from = document.getElementById('filterFrom').value || '(start)';
+    const to = document.getElementById('filterTo').value || '(latest)';
+    rangeLabel = `${from} to ${to}`;
+  }
+
+  doc.setFontSize(16); doc.setFont(undefined,'bold');
+  doc.text('MJC Daily Report — Trends', 14, y); y+=7;
+  doc.setFontSize(10); doc.setFont(undefined,'normal');
+  doc.text('Period: ' + rangeLabel, 14, y); y+=6;
+  doc.text('Generated: ' + new Date().toLocaleString('en-IN'), 14, y); y+=10;
+
+  const diagTotal = rows.reduce((s,r)=>s+Number(r.diag_collection||0),0);
+  const optTotal = rows.reduce((s,r)=>s+Number(r.opt_collection||0),0);
+  const cutTotal = rows.reduce((s,r)=>s+Number(r.cut_total_collection||0),0);
+  const collTotal = rows.reduce((s,r)=>s+Number(r.total_collection||0),0);
+  const busTotal = rows.reduce((s,r)=>s+Number(r.total_business||0),0);
+
+  doc.setFontSize(12); doc.setFont(undefined,'bold'); doc.setTextColor(15,48,87);
+  doc.text('Summary', 14, y); y+=6;
+  doc.setDrawColor(200); doc.line(14,y-3,196,y-3);
+  doc.setFontSize(9.5); doc.setFont(undefined,'normal'); doc.setTextColor(30,30,30);
+  const summaryRows = [
+    ['Days in Selection', String(rows.length)],
+    ['Diagnostics Collection', money(diagTotal)],
+    ['Opticals Collection', money(optTotal)],
+    ['Cutique Collection', money(cutTotal)],
+    ['Total Collection', money(collTotal)],
+    ['Total Business', money(busTotal)],
+    ['Average Daily Collection', money(rows.length ? collTotal/rows.length : 0)],
+  ];
+  summaryRows.forEach(([label,val])=>{
+    doc.text(label, 16, y);
+    doc.text(String(val), 190, y, { align:'right' });
+    y += 5.5;
+  });
+  y += 6;
+
+  doc.setFontSize(12); doc.setFont(undefined,'bold'); doc.setTextColor(15,48,87);
+  doc.text('Daily Breakdown', 14, y); y+=6;
+  doc.setDrawColor(200); doc.line(14,y-3,196,y-3);
+  y += 2;
+
+  doc.setFontSize(8.5); doc.setFont(undefined,'bold'); doc.setTextColor(255,255,255);
+  doc.setFillColor(15,48,87);
+  doc.rect(14, y-4, 182, 6, 'F');
+  doc.text('Date', 16, y);
+  doc.text('Diagnostics', 90, y, { align:'right' });
+  doc.text('Opticals', 120, y, { align:'right' });
+  doc.text('Cutique', 150, y, { align:'right' });
+  doc.text('Total', 194, y, { align:'right' });
+  y += 6;
+
+  doc.setFont(undefined,'normal'); doc.setTextColor(30,30,30);
+  rows.forEach((r, idx)=>{
+    if(y > 280){
+      doc.addPage(); y = 15;
+      doc.setFontSize(8.5); doc.setFont(undefined,'bold'); doc.setTextColor(255,255,255);
+      doc.setFillColor(15,48,87);
+      doc.rect(14, y-4, 182, 6, 'F');
+      doc.text('Date', 16, y);
+      doc.text('Diagnostics', 90, y, { align:'right' });
+      doc.text('Opticals', 120, y, { align:'right' });
+      doc.text('Cutique', 150, y, { align:'right' });
+      doc.text('Total', 194, y, { align:'right' });
+      y += 6;
+      doc.setFont(undefined,'normal'); doc.setTextColor(30,30,30);
+    }
+    if(idx % 2 === 0){ doc.setFillColor(248,250,252); doc.rect(14, y-4, 182, 5.5, 'F'); }
+    doc.text(r.report_date, 16, y);
+    doc.text(money(r.diag_collection), 90, y, { align:'right' });
+    doc.text(money(r.opt_collection), 120, y, { align:'right' });
+    doc.text(money(r.cut_total_collection), 150, y, { align:'right' });
+    doc.text(money(r.total_collection), 194, y, { align:'right' });
+    y += 5.5;
+  });
+
+  const filenameSafe = rangeLabel.replace(/[^a-zA-Z0-9]+/g, '_');
+  doc.save('MJC_Trends_' + filenameSafe + '.pdf');
+});
+
+sb.channel('mjc_daily_reports_changes')
+  .on('postgres_changes', { event:'*', schema:'public', table:TABLE }, ()=>{
+    if(document.getElementById('adminView').style.display !== 'none'){
+      loadAdminData();
+    }
+    if(document.getElementById('trendsView').style.display !== 'none'){
+      loadTrendsData();
+    }
+  })
+  .subscribe();
+</script>
+</body>
+</html>
